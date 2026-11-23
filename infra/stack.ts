@@ -18,6 +18,7 @@ import {
 	aws_s3_deployment as s3deploy,
 } from "aws-cdk-lib";
 import type { Construct } from "constructs";
+import { scannerFunctionCode } from "./scanner.ts";
 
 /** npm run build が書き出すフォルダ */
 export const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
@@ -44,6 +45,12 @@ export class SiteStack extends Stack {
 			removalPolicy: RemovalPolicy.RETAIN,
 		});
 
+		// .env などを探しに来るアクセスに、S3 へ取りに行かずアスキーアートを返す（scanner.ts）
+		const scannerResponse = new cloudfront.Function(this, "ScannerResponse", {
+			code: cloudfront.FunctionCode.fromInline(scannerFunctionCode()),
+			runtime: cloudfront.FunctionRuntime.JS_2_0,
+		});
+
 		const { publicDomain } = props;
 		const distribution = new cloudfront.Distribution(this, "Distribution", {
 			comment: "4rtofl.org",
@@ -65,6 +72,12 @@ export class SiteStack extends Stack {
 				responseHeadersPolicy:
 					cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
 				compress: true,
+				functionAssociations: [
+					{
+						function: scannerResponse,
+						eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+					},
+				],
 			},
 			// OAC では、S3 に無いファイルへのアクセスが 403 で返る。ページは 1 枚なので、図を 404 で返す
 			errorResponses: [
