@@ -1,5 +1,6 @@
 // リンクを貼ったときの画像（public/og.png、1200×630）と、ホーム画面用のアイコン
 // （public/apple-touch-icon.png、180×180）を、ビルドしたサイトの見た目から作り直す。
+// リンクの画像は、サイトの初めの表示と同じ Dark で作る。
 // 使い方: npm run build && npm run og
 // Chrome の場所は CHROME_PATH で変えられる（既定は macOS の Google Chrome）。
 
@@ -24,7 +25,6 @@ try {
 	const page = await browser.newPage();
 	await page.setViewport({ width: 1200, height: 630, deviceScaleFactor: 1 });
 	await page.emulateMediaFeatures([
-		{ name: "prefers-color-scheme", value: "light" },
 		{ name: "prefers-reduced-motion", value: "reduce" },
 	]);
 	await page.goto(url, { waitUntil: "networkidle0" });

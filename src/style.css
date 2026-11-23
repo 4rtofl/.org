@@ -1,15 +1,16 @@
 /* 4rtofl.org
-   色はロゴの 2 色（紙 #f2f1ec と墨 #121317）と、その間の灰色だけを使う。 */
+   色はロゴの 2 色（紙 #f2f1ec と墨 #121317）と、その間の灰色だけを使う。
+   初めは Dark で見せ、ボタンで Light を選んだときだけ紙の色にする（OS の設定には合わせない）。 */
 
 :root {
-	--paper: #f2f1ec;
-	--paper-2: #e8e7e1;
-	--ink: #121317;
-	--ink-2: #55565b;
-	--ink-3: #8f8f8a;
-	--rule: rgb(18 19 23 / 0.13);
-	--rule-strong: rgb(18 19 23 / 0.3);
-	--shadow: rgb(18 19 23 / 0.16);
+	--paper: #0e0f11;
+	--paper-2: #17181b;
+	--ink: #ecebe6;
+	--ink-2: #a2a29d;
+	--ink-3: #6c6c69;
+	--rule: rgb(236 235 230 / 0.12);
+	--rule-strong: rgb(236 235 230 / 0.28);
+	--shadow: rgb(0 0 0 / 0.5);
 
 	--font-sans:
 		"Geist Variable", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
@@ -22,33 +23,19 @@
 	--gutter: 32px;
 	--ease: cubic-bezier(0.2, 0.7, 0.1, 1);
 
-	color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-	:root:not([data-theme="light"]) {
-		--paper: #0e0f11;
-		--paper-2: #17181b;
-		--ink: #ecebe6;
-		--ink-2: #a2a29d;
-		--ink-3: #6c6c69;
-		--rule: rgb(236 235 230 / 0.12);
-		--rule-strong: rgb(236 235 230 / 0.28);
-		--shadow: rgb(0 0 0 / 0.5);
-		color-scheme: dark;
-	}
-}
-
-:root[data-theme="dark"] {
-	--paper: #0e0f11;
-	--paper-2: #17181b;
-	--ink: #ecebe6;
-	--ink-2: #a2a29d;
-	--ink-3: #6c6c69;
-	--rule: rgb(236 235 230 / 0.12);
-	--rule-strong: rgb(236 235 230 / 0.28);
-	--shadow: rgb(0 0 0 / 0.5);
 	color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+	--paper: #f2f1ec;
+	--paper-2: #e8e7e1;
+	--ink: #121317;
+	--ink-2: #55565b;
+	--ink-3: #8f8f8a;
+	--rule: rgb(18 19 23 / 0.13);
+	--rule-strong: rgb(18 19 23 / 0.3);
+	--shadow: rgb(18 19 23 / 0.16);
+	color-scheme: light;
 }
 
 /* ---------- 土台 ---------- */
@@ -174,20 +161,29 @@ a {
 	cursor: pointer;
 }
 
+/* 今の色を出す: Dark は塗った丸、Light は白抜きの丸 */
 .theme-icon {
 	width: 11px;
 	height: 11px;
 	border-radius: 50%;
 	border: 1px solid currentColor;
-	background: linear-gradient(90deg, currentColor 50%, transparent 50%);
+	background: currentColor;
 }
 
-.theme[data-mode="light"] .theme-icon {
+.theme-light {
+	display: none;
+}
+
+:root[data-theme="light"] .theme-icon {
 	background: transparent;
 }
 
-.theme[data-mode="dark"] .theme-icon {
-	background: currentColor;
+:root[data-theme="light"] .theme-dark {
+	display: none;
+}
+
+:root[data-theme="light"] .theme-light {
+	display: inline;
 }
 
 /* ---------- 説明欄と図 ---------- */
@@ -236,6 +232,30 @@ a {
 	height: auto;
 	overflow: visible;
 	-webkit-tap-highlight-color: transparent;
+	/* 図を回す（turn.ts）。指を縦に動かしたときは、ページを動かす */
+	--rot: 0deg;
+	touch-action: pan-y;
+	-webkit-user-select: none;
+	user-select: none;
+	cursor: grab;
+}
+
+.map-svg.is-turning,
+.map-svg.is-turning * {
+	cursor: grabbing;
+}
+
+/* 点・線・目盛り・流れは、中心のまわりにまとめて回す */
+.rot {
+	transform-box: view-box;
+	transform-origin: 0 0;
+	rotate: var(--rot);
+}
+
+/* 回した図の中の、流れの番号と線の説明は、向きを変えずに立てておく */
+.badge,
+.map-svg .edge-label {
+	rotate: calc(var(--rot) * -1);
 }
 
 /* ---------- 説明欄: 全体（名前・流れ・メンバー） ---------- */
@@ -363,11 +383,13 @@ a {
 	text-underline-offset: 3px;
 }
 
+/* 行の上に揃えると、名前の文字の高さが左の見出し（by）と揃う */
 .spec-member {
 	display: inline-flex;
 	align-items: center;
 	gap: 7px;
 	margin-right: 16px;
+	vertical-align: top;
 }
 
 .spec-member .avatar {
@@ -378,31 +400,6 @@ a {
 .spec-member:hover span {
 	text-decoration: underline;
 	text-underline-offset: 3px;
-}
-
-/* スマートフォンの小さい図で使う、番号と名前の対応（広い画面では出さない） */
-.ov-key {
-	display: none;
-	list-style: none;
-	margin: 0 0 32px;
-	padding: 0;
-	columns: 2;
-	column-gap: 24px;
-}
-
-.ov-key a {
-	display: block;
-	padding: 3px 0;
-	font-size: 14px;
-	font-weight: 600;
-}
-
-.key-num {
-	display: inline-block;
-	width: 26px;
-	font-family: var(--font-mono);
-	font-size: 10px;
-	color: var(--ink-3);
 }
 
 .colophon {
@@ -976,6 +973,7 @@ a.stop-name:hover {
 	stroke-linejoin: round;
 	transform: translateY(3px);
 	transform-box: fill-box;
+	transform-origin: center;
 	transition:
 		opacity 0.3s var(--ease),
 		transform 0.45s var(--ease);
@@ -1008,7 +1006,8 @@ a.stop-name:hover {
 	stroke-dasharray: none;
 }
 
-/* 広い図と小さい図で、外のものの箱・線・番号の場所が違う */
+/* 広い図と小さい図で、名前の大きさと場所、外のものの箱・線・番号の場所が違う */
+.name-compact,
 .sat-compact,
 .port-compact,
 .badge-compact {
@@ -1211,12 +1210,6 @@ a.stop-name:hover {
 	fill: var(--ink);
 }
 
-.map-svg .node-num {
-	display: none;
-	font-family: var(--font-mono);
-	font-weight: 500;
-}
-
 .node:hover .node-ring,
 .node:focus-visible .node-ring,
 .node.is-focus .node-ring,
@@ -1364,9 +1357,7 @@ a.stop-name:hover {
 	transform-origin: center;
 }
 
-.is-intro .node-name,
-.is-intro .node-kind,
-.is-intro .node-num {
+.is-intro .node-name {
 	animation: fade-in 0.7s var(--ease) calc(1.05s + var(--i) * 40ms) backwards;
 }
 
@@ -1515,6 +1506,7 @@ a.stop-name:hover {
 
 	.map-svg {
 		height: 100%;
+		touch-action: none;
 	}
 }
 
@@ -1669,7 +1661,7 @@ a.stop-name:hover {
 	}
 }
 
-/* スマートフォン: 図はラベルを消して番号だけにし、番号と名前の対応を下に出す */
+/* スマートフォン: 名前を小さく書いた図にする。名前が画面の幅に収まる向きに回し、カテゴリ名と中心の文字は出さない */
 @media (max-width: 760px) {
 	:root {
 		--gutter: 16px;
@@ -1677,7 +1669,7 @@ a.stop-name:hover {
 	}
 
 	.theme-text {
-		display: none;
+		display: none !important;
 	}
 
 	.theme {
@@ -1690,23 +1682,17 @@ a.stop-name:hover {
 		font-size: 60px;
 	}
 
-	.ov-key {
-		display: block;
-	}
-
 	.map {
 		padding: 4px var(--gutter) 16px;
 	}
 
-	.map-svg .node-name,
-	.map-svg .cat-label,
-	.map-svg .hub-caption,
-	.map-svg rect.node-hit {
-		display: none;
+	.map-svg {
+		--rot: var(--rot-compact, 0deg);
 	}
 
-	.map-svg .node-num {
-		display: inline;
+	.map-svg .cat-label,
+	.map-svg .hub-caption {
+		display: none;
 	}
 
 	.map-svg circle.node-hit {
@@ -1730,6 +1716,7 @@ a.stop-name:hover {
 		transform: scale(1.7);
 	}
 
+	.name-full,
 	.sat-full,
 	.port-full,
 	.badge-full,
@@ -1737,6 +1724,7 @@ a.stop-name:hover {
 		display: none;
 	}
 
+	.name-compact,
 	.sat-compact,
 	.port-compact,
 	.badge-compact {

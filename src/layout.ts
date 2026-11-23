@@ -8,26 +8,48 @@
 //   外のものとのつながりは、目盛りの輪から始まる（輪から箱までは、箱から輪への線が受け持つ）。
 // - 中心（4rtofl の GitHub）とのつながりは、リポジトリなら中心からの線を、外のものなら中心へまっすぐ引いた線を使う。
 // - 線に添える短い説明は、線に沿って、名前・箱・カテゴリ名に重ならない所を探して置く。
+// - 図は回せる（turn.ts）。点・線・目盛りは回転でまとめて動かし、名前・外のものの箱・カテゴリ名・中心の文字は、
+//   向きに合わせて置き直す（置き方は place.ts）。ここでは、広い図（回していない向き）と、
+//   スマートフォンの小さい図（名前が画面の幅に収まる向きに回したもの）の 2 つを計算する。
 
 import type { Actor, Category, Flow, Project } from "./data.ts";
+import {
+	add,
+	type Box,
+	badgeWidth,
+	captionPath,
+	catPlace,
+	deg,
+	f2 as f,
+	mul,
+	type NamePlace,
+	norm,
+	overlap,
+	type Pt,
+	placeName,
+	polar,
+	pt,
+	rad,
+	satBadgeAt,
+	satBox,
+	satInner,
+	signed,
+	tangent,
+	turn,
+	unit,
+} from "./place.ts";
 
-export interface Pt {
-	x: number;
-	y: number;
-}
+export type { Box, Pt } from "./place.ts";
 
-export interface Box {
-	x: number;
-	y: number;
+/** 広い図（full）と、スマートフォンの小さい図（compact） */
+export type Mode = "full" | "compact";
+export const MODES: Mode[] = ["full", "compact"];
+
+export interface NameLayout extends NamePlace {
+	/** 名前の幅（字幅からの見積もり）・文字の大きさ・中心からの距離。図を回したときに置き直すのに使う */
 	w: number;
-	h: number;
-}
-
-export interface Label {
-	anchor: "start" | "end" | "middle";
-	x: number;
-	nameY: number;
-	box: Box;
+	size: number;
+	r: number;
 }
 
 export interface NodeLayout {
@@ -39,9 +61,8 @@ export interface NodeLayout {
 	pos: Pt;
 	/** 中心から点までの線（SVG の path の d） */
 	track: string;
-	label: Label;
-	/** 小さい図で、番号を置く位置 */
-	compactNum: Pt;
+	/** 名前を置く場所（広い図と小さい図。小さい図は、compactTurn だけ回した向きでの場所） */
+	name: Record<Mode, NameLayout>;
 }
 
 /** 輪の外に置く、外のもの */
@@ -51,13 +72,19 @@ export interface SatLayout {
 	angle: number;
 	/** 広い図での箱と線 */
 	full: SatPlace;
-	/** 小さい図（スマートフォン）での箱と線。名前だけを大きく書く */
+	/** 小さい図（スマートフォン）での箱と線。名前を大きく書く */
 	compact: SatPlace;
 }
 
 export interface SatPlace {
+	/** 箱（小さい図は、compactTurn だけ回した向きでの場所） */
 	box: Box;
-	/** 箱から目盛りの輪までの線（ふだんは点線、選んだときは実線） */
+	/** 箱の内側の端の、中心からの距離 */
+	inner: number;
+	/** 名前とぶつからないよう箱を外へ出すときの、目盛りの輪からの始めの距離と、名前との間 */
+	gap: number;
+	avoid: number;
+	/** 箱から目盛りの輪までの線（回していない向きの座標。ふだんは点線、選んだときは実線） */
 	port: { from: Pt; to: Pt };
 }
 
@@ -91,12 +118,17 @@ export interface PillLayout {
 }
 
 export interface Badge {
+	/** 回していない向きの座標 */
 	at: Pt;
-	/** 小さい図での場所（外のものの箱は、小さい図では輪に近づく） */
+	/** 小さい図での場所（外のものの箱は、広い図と小さい図で場所が違う） */
 	compactAt: Pt;
 	text: string;
 	actor: string;
 	shape: "circle" | "square";
+	/** 外のものの箱に付ける番号なら、その id（図を回すと、箱に合わせて動かす） */
+	sat?: string;
+	/** 番号の枠の幅 */
+	width: number;
 }
 
 export interface FlowLayout {
@@ -124,10 +156,18 @@ export interface MapLayout {
 	pills: PillLayout[];
 	flows: FlowLayout[];
 	categories: CategoryLayout[];
-	/** 中心の輪の外に沿って書く「GITHUB」の道 */
-	hubCaption: { path: string; text: string };
+	/** 中心の輪の外に沿って書く「GITHUB」の道（angle を真ん中に span 度、半径 r） */
+	hubCaption: {
+		path: string;
+		text: string;
+		angle: number;
+		span: number;
+		r: number;
+	};
 	viewBox: Box;
 	compactViewBox: Box;
+	/** 小さい図で、名前が画面の幅に収まるように図を回す角度 */
+	compactTurn: number;
 	ticks: { angle: number; major: boolean }[];
 	rDial: number;
 	hubId: string;
@@ -136,6 +176,8 @@ export interface MapLayout {
 export interface CategoryLayout {
 	category: Category;
 	angle: number;
+	/** 束の真ん中から、反時計回りの側の端までの幅（カテゴリ名をその外に置く） */
+	side: number;
 	label: { x: number; y: number; rotate: number; anchor: "start" | "end" };
 }
 
@@ -153,12 +195,18 @@ export const GEOMETRY = {
 	laneGap: 8,
 	/** つながりの線の角の半径 */
 	linkFillet: 6,
-	nameSize: 19,
-	compactNumSize: 22,
+	/** リポジトリの名前の文字の大きさと、目盛りの輪からの距離（広い図と小さい図） */
+	name: {
+		full: { size: 19, gap: 17 },
+		compact: { size: 26, gap: 12 },
+	},
 	/** 外のものの箱の文字 */
 	satName: 11.5,
 	/** 小さい図での、外のものの名前 */
 	satCompact: 17,
+	/** 外のものの箱を置き始める、目盛りの輪からの距離と、名前との間 */
+	satGap: { full: 22, compact: 12 },
+	satAvoid: { full: 10, compact: 6 },
 	/** 線に添える説明の文字 */
 	pillSize: 12,
 } as const;
@@ -167,27 +215,6 @@ export const GEOMETRY = {
 const rTop = (depth: number) => GEOMETRY.rArc + depth * GEOMETRY.gap;
 
 const K = 0.5523; // 円弧を 3 次ベジェで近似するときの係数
-
-const rad = (deg: number) => (deg * Math.PI) / 180;
-const deg = (r: number) => (r * 180) / Math.PI;
-const unit = (a: number): Pt => ({ x: Math.sin(rad(a)), y: -Math.cos(rad(a)) });
-/** 時計回りの接線の向き */
-const tangent = (a: number): Pt => ({
-	x: Math.cos(rad(a)),
-	y: Math.sin(rad(a)),
-});
-const polar = (r: number, a: number): Pt => ({
-	x: r * Math.sin(rad(a)),
-	y: -r * Math.cos(rad(a)),
-});
-const add = (...ps: Pt[]): Pt =>
-	ps.reduce((s, p) => ({ x: s.x + p.x, y: s.y + p.y }), { x: 0, y: 0 });
-const mul = (p: Pt, k: number): Pt => ({ x: p.x * k, y: p.y * k });
-const f = (n: number) => Number(n.toFixed(2));
-const pt = (p: Pt) => `${f(p.x)} ${f(p.y)}`;
-const norm = (a: number) => ((a % 360) + 360) % 360;
-/** a から b への、近いほうの向きの差（時計回りが正） */
-const signed = (a: number, b: number) => ((((b - a) % 360) + 540) % 360) - 180;
 
 /** 文字列の幅を、Geist のおおよその字幅から見積もる */
 export function textWidth(text: string, size: number): number {
@@ -379,46 +406,12 @@ function permutations<T>(xs: T[]): T[][] {
 
 // ---------- ラベル ----------
 
-function labelFor(p: Placed, rLabel: number): Label {
-	const { nameSize } = GEOMETRY;
-	const at = polar(rLabel, p.angle);
-	const s = Math.sin(rad(p.angle));
-	const c = Math.cos(rad(p.angle));
-	// 名前だけを 1 行で書く
-	const w = textWidth(p.project.name, nameSize);
-	const h = 22;
-	let anchor: "start" | "end" | "middle";
-	let top: number;
-	if (s > 0.3) {
-		anchor = "start";
-		top = at.y - h / 2;
-	} else if (s < -0.3) {
-		anchor = "end";
-		top = at.y - h / 2;
-	} else {
-		anchor = "middle";
-		top = c > 0 ? at.y - h + 2 : at.y + 2;
-	}
-	const x = at.x;
-	const bx = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2;
-	return {
-		anchor,
-		x,
-		nameY: top + 16,
-		box: { x: bx, y: top, w, h },
-	};
-}
-
-function overlap(a: Box, b: Box, pad: number): number {
-	const w =
-		Math.min(a.x + a.w + pad, b.x + b.w + pad) - Math.max(a.x - pad, b.x - pad);
-	const h =
-		Math.min(a.y + a.h + pad, b.y + b.h + pad) - Math.max(a.y - pad, b.y - pad);
-	return w > 0 && h > 0 ? w * h : 0;
-}
-
-function scoreRotation(placed: Placed[], rLabel: number): number {
-	const boxes = placed.map((p) => labelFor(p, rLabel).box);
+/** 名前が重ならず、横に広がりすぎない回転ほど小さくなる点数 */
+function scoreRotation(placed: Placed[], rName: number): number {
+	const { size } = GEOMETRY.name.full;
+	const boxes = placed.map(
+		(p) => placeName(p.angle, textWidth(p.project.name, size), rName, size).box,
+	);
 	let score = 0;
 	for (let i = 0; i < boxes.length; i++) {
 		for (let j = i + 1; j < boxes.length; j++) {
@@ -709,13 +702,17 @@ export function layoutMap(
 	const laneR = (k: number) => rRing + bandInset + k * laneGap;
 	// 外の目盛りの輪は、帯のいちばん外の線の少し外に置く
 	const rDial = lanes ? laneR(lanes - 1) + 16 : rRing + 18;
-	const rLabel = rDial + 17;
+	// 名前を置く、中心からの距離（広い図と小さい図）
+	const rName: Record<Mode, number> = {
+		full: rDial + GEOMETRY.name.full.gap,
+		compact: rDial + GEOMETRY.name.compact.gap,
+	};
 
 	// ラベルが重ならない回転を探す
 	let best = 0;
 	let bestScore = Number.POSITIVE_INFINITY;
 	for (let a = 0; a < 360; a += 0.5) {
-		const s = scoreRotation(placeAngles(groups, a), rLabel);
+		const s = scoreRotation(placeAngles(groups, a), rName.full);
 		if (s < bestScore - 1e-6) {
 			bestScore = s;
 			best = a;
@@ -723,6 +720,19 @@ export function layoutMap(
 	}
 	const placed = placeAngles(groups, best);
 	const angleOf = (id: string) => best + relOf(id);
+
+	/** 名前の置き場所。図を turnBy だけ回したときの場所を返す */
+	const nameAt = (
+		p: Project,
+		angle: number,
+		mode: Mode,
+		turnBy: number,
+	): NameLayout => {
+		const { size } = GEOMETRY.name[mode];
+		const w = f(textWidth(p.name, size));
+		const r = rName[mode];
+		return { ...placeName(angle + turnBy, w, r, size), w, size, r };
+	};
 
 	// リポジトリの線
 	const nodes: NodeLayout[] = [];
@@ -739,6 +749,7 @@ export function layoutMap(
 			const d = k - m;
 			const t = trackPath(p.angle, trunk, d, d > 0 ? depthCw : depthCcw, depth);
 			trackPaths.set(p.project.id, t.path);
+			const full = nameAt(p.project, p.angle, "full", 0);
 			nodes.push({
 				project: p.project,
 				index: p.index,
@@ -746,61 +757,96 @@ export function layoutMap(
 				radius: t.r,
 				pos: polar(t.r, p.angle),
 				track: toD(t.path),
-				label: labelFor(p, rLabel),
-				compactNum: polar(rDial + 24, p.angle),
+				// 小さい図の名前は、回す角度が決まってから置き直す
+				name: { full, compact: full },
 			});
 		}
 		// カテゴリ名は、束の反時計回りの側に、中心から外へ向かって書く
-		const n0 = norm(trunk);
-		const rightHalf = n0 > 0 && n0 < 180;
-		const lateral = -(depthCcw * gap) - (rightHalf ? 7 : 13.5);
-		const base = add(mul(unit(trunk), rHub + 14), mul(tangent(trunk), lateral));
+		const side = depthCcw * gap;
 		cats.push({
 			category,
 			angle: trunk,
-			label: {
-				x: f(base.x),
-				y: f(base.y),
-				rotate: f(rightHalf ? trunk - 90 : trunk + 90),
-				anchor: rightHalf ? "start" : "end",
-			},
+			side,
+			label: catPlace(trunk, side, rHub),
 		});
 	}
 	nodes.sort((a, b) => a.index - b.index);
-	const labelBoxes = nodes.map((n) => n.label.box);
 
-	// 外のもの: カテゴリの間の向きに置く。箱の内側の端が、中心から inner の距離に来るようにする
+	// 外のもの: カテゴリの間の向きに、リポジトリの名前とぶつからないところまで外へ出して置く
 	const { satName, satCompact } = GEOMETRY;
-	const satAt = (angle: number, w: number, h: number, inner: number) => {
-		const u = unit(angle);
-		const t = Math.min(
-			w / 2 / Math.max(Math.abs(u.x), 1e-6),
-			h / 2 / Math.max(Math.abs(u.y), 1e-6),
-		);
-		const c = polar(inner + t, angle);
-		const edge = add(c, mul(u, -t));
+	const satSize = (a: Actor, mode: Mode) => {
+		const name = a.name.toUpperCase();
+		// 小さい図は、名前を大きく書く（字間 0.08em）
+		return mode === "full"
+			? { w: f(monoWidth(name, satName) + 26), h: 30 }
+			: { w: f(name.length * satCompact * 0.68 + 20), h: 32 };
+	};
+	const satAt = (
+		a: Actor,
+		angle: number,
+		mode: Mode,
+		turnBy: number,
+		names: Box[],
+	): SatPlace => {
+		const { w, h } = satSize(a, mode);
+		const gapOut = GEOMETRY.satGap[mode];
+		const avoid = GEOMETRY.satAvoid[mode];
+		const inner = satInner(angle + turnBy, w, h, rDial + gapOut, names, avoid);
 		return {
-			box: { x: c.x - w / 2, y: c.y - h / 2, w, h },
-			port: { from: edge, to: polar(rDial, angle) },
+			box: satBox(angle + turnBy, w, h, inner),
+			inner,
+			gap: gapOut,
+			avoid,
+			port: { from: polar(inner, angle), to: polar(rDial, angle) },
 		};
 	};
-	const sats: SatLayout[] = exts
+	const satActors = exts
 		.filter((a) => bestGaps.has(a.id))
-		.map((a) => {
-			const angle = angleOf(a.id);
-			const name = a.name.toUpperCase();
-			// 広い図: 名前だけの箱を、リポジトリの名前とぶつからないところまで外へ出す
-			const w = monoWidth(name, satName) + 26;
-			let full = satAt(angle, w, 30, rDial + 22);
-			for (let inner = rDial + 22; inner < rDial + 260; inner += 4) {
-				full = satAt(angle, w, 30, inner);
-				if (labelBoxes.every((lb) => overlap(full.box, lb, 10) === 0)) break;
+		.map((a) => ({ actor: a, angle: angleOf(a.id) }));
+	const fullNames = nodes.map((n) => n.name.full.box);
+
+	// 小さい図では、名前が画面の幅に収まるよう、左右に出る幅がいちばん狭くなる角度に図を回す
+	let compactTurn = 0;
+	let compactCost = Number.POSITIVE_INFINITY;
+	for (let r = 0; r < 360; r += 0.5) {
+		const boxes = nodes.map(
+			(n) => nameAt(n.project, n.angle, "compact", r).box,
+		);
+		let clash = false;
+		for (let i = 0; i < boxes.length && !clash; i++) {
+			for (let j = i + 1; j < boxes.length; j++) {
+				if (overlap(boxes[i] as Box, boxes[j] as Box, 4) > 0) {
+					clash = true;
+					break;
+				}
 			}
-			// 小さい図: 名前は消えるので、目盛りの輪のすぐ外に置く（字間 0.08em）
-			const cw = name.length * satCompact * 0.68 + 20;
-			const compact = satAt(angle, cw, 32, rDial + 12);
-			return { actor: a, angle, full, compact };
-		});
+		}
+		if (clash) continue;
+		let half = 0;
+		for (const b of [
+			...boxes,
+			...satActors.map((s) => satAt(s.actor, s.angle, "compact", r, boxes).box),
+		]) {
+			half = Math.max(half, -b.x, b.x + b.w);
+		}
+		// 同じくらいなら、回す角度の小さいほう
+		const cost = half + 0.01 * Math.min(r, 360 - r);
+		if (cost < compactCost - 1e-6) {
+			compactCost = cost;
+			compactTurn = r;
+		}
+	}
+	for (const n of nodes) {
+		n.name.compact = nameAt(n.project, n.angle, "compact", compactTurn);
+	}
+	const compactNames = nodes.map((n) => n.name.compact.box);
+	const sats: SatLayout[] = satActors.map(({ actor, angle }) => ({
+		actor,
+		angle,
+		full: satAt(actor, angle, "full", 0, fullNames),
+		compact: satAt(actor, angle, "compact", compactTurn, compactNames),
+	}));
+	const labelBoxes = fullNames;
 
 	const placeAngle = new Map<string, number>();
 	const placeR = new Map<string, number>();
@@ -929,36 +975,35 @@ export function layoutMap(
 			if (l?.to === hubId) return (p.segs[p.segs.length - 1] as Seg).to;
 			return p.start;
 		})();
-		const badges = [...steps].map(([id, nums]) => {
+		const badges = [...steps].map(([id, nums]): Badge => {
 			const sat = sats.find((s) => s.actor.id === id);
-			// 外のものは箱の左上の角に置く
-			const at = sat
-				? { x: sat.full.box.x, y: sat.full.box.y }
-				: id === hubId
-					? hubEntry
-					: polar(placeR.get(id) ?? rRing, placeAngle.get(id) ?? 0);
-			// 小さい図では番号が 1.7 倍になるので、名前にかからないよう、箱の上の、輪に近い側の角の外へずらす
 			const text = nums.join("·");
-			let compactAt = at;
+			const width = badgeWidth(text);
+			const shape = projectIds.has(id) ? "circle" : "square";
 			if (sat) {
-				const b = sat.compact.box;
-				const half =
-					((text.length > 1 ? 10 + text.length * 5.6 : 18) * 1.7) / 2;
-				const rightHalf = norm(sat.angle) < 180;
-				compactAt = {
-					x: rightHalf ? b.x + 6 - half : b.x + b.w - 6 + half,
-					y: b.y - 9,
+				// 外のものの箱に付ける番号は、箱に合わせて置く。番号は回した図の中にあるので、回す前の向きの座標に直す
+				const at = satBadgeAt(sat.full.box, sat.angle, width, false);
+				const c = satBadgeAt(
+					sat.compact.box,
+					sat.angle + compactTurn,
+					width,
+					true,
+				);
+				return {
+					at,
+					compactAt: turn(c, -compactTurn),
+					text,
+					actor: id,
+					shape,
+					sat: id,
+					width,
 				};
 			}
-			return {
-				at,
-				compactAt,
-				text,
-				actor: id,
-				shape: (projectIds.has(id) ? "circle" : "square") as
-					| "circle"
-					| "square",
-			};
+			const at =
+				id === hubId
+					? hubEntry
+					: polar(placeR.get(id) ?? rRing, placeAngle.get(id) ?? 0);
+			return { at, compactAt: at, text, actor: id, shape, width };
 		});
 		const actorsIn = new Set<string>();
 		for (const s of fl.stops) {
@@ -1106,15 +1151,12 @@ export function layoutMap(
 	const capText = hub ? hub.name.toUpperCase() : "";
 	const capR = rHub + 10;
 	const capSpan = deg((monoWidth(capText, 7.5) + 8) / capR);
-	const capNorm = norm(capAngle);
-	const bottom = capNorm > 90 && capNorm < 270;
-	// 下半分では、文字が逆さにならないよう反時計回りの道にする
-	const capFrom = bottom ? capAngle + capSpan / 2 : capAngle - capSpan / 2;
-	const capTo = bottom ? capAngle - capSpan / 2 : capAngle + capSpan / 2;
-	const capRr = bottom ? capR + 5 : capR;
 	const hubCaption = {
-		path: `M${pt(polar(capRr, capFrom))}A${capRr} ${capRr} 0 0 ${bottom ? 0 : 1} ${pt(polar(capRr, capTo))}`,
+		path: captionPath(capAngle, capSpan, capR),
 		text: capText,
+		angle: f(capAngle),
+		span: f(capSpan),
+		r: capR,
 	};
 
 	// 目盛り: 2.5 度ごとの細かい目盛りと、点の向きの長い目盛り
@@ -1142,14 +1184,20 @@ export function layoutMap(
 		w: f(halfW * 2),
 		h: f(halfH * 2),
 	};
-	// 小さい図は、円と番号と外のものの箱（左上の番号は 1.7 倍になる）が収まる大きさにする
-	let cw = rDial + 24 + GEOMETRY.compactNumSize;
-	let ch = cw;
-	for (const s of sats) {
-		const b = s.compact.box;
-		cw = Math.max(cw, -b.x + 8, b.x + b.w + 8);
-		ch = Math.max(ch, -b.y + 27, b.y + b.h + 8);
+	// 小さい図は、回した向きで、円と名前と外のものの箱（上に付く番号は 1.7 倍になる）が収まる大きさにする
+	const compactMargin = 10;
+	let cw = rDial + 12;
+	let ch = rDial + 12;
+	for (const b of [
+		...nodes.map((n) => n.name.compact.box),
+		...sats.map((s) => s.compact.box),
+		...sats.map((s) => ({ ...s.compact.box, y: s.compact.box.y - 26 })),
+	]) {
+		cw = Math.max(cw, -b.x, b.x + b.w);
+		ch = Math.max(ch, -b.y, b.y + b.h);
 	}
+	cw += compactMargin;
+	ch += compactMargin;
 	const compactViewBox = {
 		x: f(-cw),
 		y: f(-ch),
@@ -1167,6 +1215,7 @@ export function layoutMap(
 		hubCaption,
 		viewBox,
 		compactViewBox,
+		compactTurn,
 		ticks,
 		rDial,
 		hubId,

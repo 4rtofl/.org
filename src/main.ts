@@ -1,12 +1,14 @@
 import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
 import "./style.css";
+import { setupTurn } from "./turn.ts";
 
 // ビルドのときに書き出した HTML に、操作を足す。
 // - 点（リポジトリ）と箱（外のもの）: のせると、つながる相手と線を強調する。押すと、説明欄に説明を出し、URL の # を変える。
 // - 流れ: 一覧の行にのせるか押すと、図にその流れの線と順番の番号を出し、点を道に沿って動かす。
 // - 欄と図の間の目盛り: リポジトリを作った日の目盛りにのせると、その点を強調する。
 // - マウス: 小さな丸が少し遅れてついて動き、押せるものの上で広がる（ZERO TOKYO のホームページと同じ動き）。
+// - 図を回す動きは turn.ts。
 
 const root = document.documentElement;
 const svg = document.querySelector<SVGSVGElement>(".map-svg");
@@ -45,6 +47,8 @@ const dot = document.querySelector<SVGCircleElement>(".flow-dot");
 const marker = document.querySelector<SVGGElement>(".map-marker");
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const stacked = window.matchMedia("(max-width: 1179px)");
+// スマートフォン: 図を小さい図（名前を大きくし、画面の幅に収まる向きに回したもの）にする
+const narrow = window.matchMedia("(max-width: 760px)");
 
 const nodeById = new Map(nodes.map((n) => [n.dataset.id ?? "", n]));
 const words = (s: string | undefined) => (s ?? "").split(" ").filter(Boolean);
@@ -566,8 +570,7 @@ window.addEventListener("popstate", () => {
 	select(location.hash.slice(1) || null, { push: false });
 });
 
-// 狭い画面では、ラベルを消して円だけを大きく見せる
-const narrow = window.matchMedia("(max-width: 760px)");
+// スマートフォンでは、小さい図の表示範囲にする
 function fitViewBox() {
 	if (!svg) return;
 	const vb = narrow.matches
@@ -577,6 +580,13 @@ function fitViewBox() {
 }
 narrow.addEventListener("change", fitViewBox);
 fitViewBox();
+if (svg) {
+	setupTurn(svg, {
+		compact: narrow,
+		wide: window.matchMedia("(min-width: 1180px)"),
+		reduceMotion,
+	});
+}
 reduceMotion.addEventListener("change", () => {
 	dotFlow = null;
 	render();
@@ -636,41 +646,34 @@ if (finePointer.matches) {
 	});
 }
 
-// 表示の色: Auto → Light → Dark
+// 表示の色: 初めは Dark。ボタンで Light と切り替え、選んだ色を覚える（index.html が最初の表示の前に読み直す）。
+// ボタンに出す名前とアイコンは CSS が決めるので、ここでは色と、読み上げの名前と、ブラウザの帯の色を変える
 const themeButton = document.querySelector<HTMLButtonElement>(
 	"[data-theme-toggle]",
 );
-type Theme = "auto" | "light" | "dark";
-const themeNames: Record<Theme, string> = {
-	auto: "Auto",
-	light: "Light",
-	dark: "Dark",
-};
-function currentTheme(): Theme {
-	const t = root.dataset.theme;
-	return t === "light" || t === "dark" ? t : "auto";
-}
+const themeColor = document.querySelector<HTMLMetaElement>(
+	'meta[name="theme-color"]',
+);
+type Theme = "light" | "dark";
+const currentTheme = (): Theme =>
+	root.dataset.theme === "light" ? "light" : "dark";
 function applyTheme(t: Theme) {
-	if (t === "auto") delete root.dataset.theme;
-	else root.dataset.theme = t;
+	if (t === "light") root.dataset.theme = "light";
+	else delete root.dataset.theme;
+	themeColor?.setAttribute("content", t === "light" ? "#f2f1ec" : "#0e0f11");
+	themeButton?.setAttribute(
+		"aria-label",
+		`Color theme: ${t === "light" ? "Light" : "Dark"}`,
+	);
+}
+themeButton?.addEventListener("click", () => {
+	const next: Theme = currentTheme() === "dark" ? "light" : "dark";
+	applyTheme(next);
 	try {
-		if (t === "auto") localStorage.removeItem("theme");
-		else localStorage.setItem("theme", t);
+		localStorage.setItem("theme", next);
 	} catch {
 		// 保存できない環境でも、表示は切り替える
 	}
-	if (themeButton) {
-		const text = themeButton.querySelector(".theme-text");
-		if (text) text.textContent = themeNames[t];
-		themeButton.setAttribute("aria-label", `Color theme: ${themeNames[t]}`);
-		themeButton.dataset.mode = t;
-	}
-}
-themeButton?.addEventListener("click", () => {
-	const order: Theme[] = ["auto", "light", "dark"];
-	applyTheme(
-		order[(order.indexOf(currentTheme()) + 1) % order.length] ?? "auto",
-	);
 });
 applyTheme(currentTheme());
 

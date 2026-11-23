@@ -16,15 +16,18 @@ import {
 	statusLabel,
 } from "./data.ts";
 import {
+	type Badge,
 	GEOMETRY,
 	layoutMap,
 	type MapLayout,
+	type Mode,
 	type NodeLayout,
+	type Pt,
 	type SatLayout,
 } from "./layout.ts";
 import { markGroup, markSvg } from "./logo.ts";
 
-const esc = (s: string) =>
+export const esc = (s: string) =>
 	s
 		.replaceAll("&", "&amp;")
 		.replaceAll("<", "&lt;")
@@ -33,7 +36,8 @@ const esc = (s: string) =>
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const ext = 'target="_blank" rel="noopener"';
-const n2 = (v: number) => v.toFixed(2);
+export const n2 = (v: number) => v.toFixed(2);
+const n1 = (v: number) => v.toFixed(1);
 
 const projectById = (id: string) => projects.find((p) => p.id === id);
 const actorById = (id: string) => actors.find((a) => a.id === id) as Actor;
@@ -57,32 +61,122 @@ function avatar(m: Member, size: number): string {
 	return `<img class="avatar" src="${esc(m.avatar)}" alt="" width="${size}" height="${size}" loading="lazy" decoding="async">`;
 }
 
-function radial(r0: number, r1: number, angle: number) {
+export function radial(r0: number, r1: number, angle: number) {
 	const a = (angle * Math.PI) / 180;
 	const s = Math.sin(a);
 	const k = -Math.cos(a);
 	return `x1="${n2(r0 * s)}" y1="${n2(r0 * k)}" x2="${n2(r1 * s)}" y2="${n2(r1 * k)}"`;
 }
 
-function renderMap(layout: MapLayout): string {
-	const { rHub, nameSize, compactNumSize } = GEOMETRY;
+/** 外の目盛り（2.5 度ごとの細かい目盛りと、点の向きの長い目盛り） */
+export function dialTicks(layout: MapLayout): string {
 	const rDial = layout.rDial;
-	const { x, y, w, h } = layout.viewBox;
-	const c = layout.compactViewBox;
-
-	const ticks = layout.ticks
+	return layout.ticks
 		.map(
 			(t) =>
 				`<line class="tick${t.major ? " tick-major" : ""}" ${radial(t.major ? rDial - 4 : rDial, t.major ? rDial + 9 : rDial + 3.5, t.angle)}/>`,
 		)
 		.join("");
+}
 
-	const tracks = layout.nodes
+/** 中心から点までの線 */
+export function trackPaths(layout: MapLayout): string {
+	return layout.nodes
 		.map(
 			(nd, i) =>
 				`<path class="track" data-node="${nd.project.id}" data-cat="${nd.project.category}" d="${nd.track}" pathLength="1" style="--i:${i}"/>`,
 		)
 		.join("");
+}
+
+/** 点から、外の目盛りとラベルへ向かう点線 */
+export function leaderLines(layout: MapLayout): string {
+	return layout.nodes
+		.map(
+			(nd) =>
+				`<line class="leader" data-node="${nd.project.id}" ${radial(nd.radius + 8, layout.rDial - 5, nd.angle)} style="--i:${nd.index}"/>`,
+		)
+		.join("");
+}
+
+/** 外のものの箱から目盛りの輪へ入る線 */
+export function portLine(st: SatLayout, mode: Mode): string {
+	const { from, to } = st[mode].port;
+	return `<line class="port port-${mode}" data-node="${st.actor.id}" x1="${n2(from.x)}" y1="${n2(from.y)}" x2="${n2(to.x)}" y2="${n2(to.y)}"/>`;
+}
+
+/** カテゴリ名。図を回すと置き直すので、束の向き（trunk）と幅（side）を持たせる */
+export function catLabels(layout: MapLayout): string {
+	return layout.categories
+		.map(
+			(cl) =>
+				`<text class="cat-label" data-cat="${cl.category.id}" data-trunk="${n2(cl.angle)}" data-side="${cl.side}" transform="translate(${cl.label.x} ${cl.label.y}) rotate(${cl.label.rotate})" text-anchor="${cl.label.anchor}">${esc(cl.category.label.toUpperCase())}</text>`,
+		)
+		.join("");
+}
+
+/** 中心の輪とロゴと、輪に沿って書く「GITHUB」。ロゴは図を回しても立てたままにする */
+export function hubInner(layout: MapLayout): string {
+	const { rHub } = GEOMETRY;
+	const cap = layout.hubCaption;
+	return [
+		`<circle class="hub-hit" r="${rHub + 6}"/>`,
+		`<circle class="hub-ring" r="${rHub}" pathLength="1"/>`,
+		markGroup(rHub * 1.12),
+		`<path id="hub-caption" class="hub-caption-path" d="${cap.path}" data-angle="${cap.angle}" data-span="${cap.span}" data-r="${cap.r}"/>`,
+		`<text class="hub-caption"><textPath href="#hub-caption" startOffset="50%" text-anchor="middle">${esc(cap.text)}</textPath></text>`,
+	].join("");
+}
+
+/** リポジトリの名前（押せる範囲の四角と文字）。図を回すと置き直すので、幅・中心からの距離・文字の大きさを持たせる */
+export function nameLabel(nd: NodeLayout, mode: Mode): string {
+	const n = nd.name[mode];
+	const b = n.box;
+	return [
+		`<g class="name name-${mode}" data-w="${n.w}" data-r="${n.r}" data-size="${n.size}">`,
+		`<rect class="node-hit" x="${n1(b.x - 6)}" y="${n1(b.y - 4)}" width="${n1(b.w + 12)}" height="${n1(b.h + 8)}"/>`,
+		`<text class="node-name" x="${n1(n.x)}" y="${n1(n.y)}" text-anchor="${n.anchor}" font-size="${n.size}">${esc(nd.project.name)}</text>`,
+		"</g>",
+	].join("");
+}
+
+/** 外のものの箱。箱の真ん中を translate で動かすので、中身は (0, 0) を真ん中に描く */
+export function satGroup(st: SatLayout, mode: Mode): string {
+	const p = st[mode];
+	const b = p.box;
+	const name = esc(st.actor.name.toUpperCase());
+	const text =
+		mode === "full"
+			? `<text class="sat-name" x="0" y="4.2" text-anchor="middle">${name}</text>`
+			: `<text class="sat-cname" x="0" y="6" text-anchor="middle">${name}</text>`;
+	return [
+		`<g class="sat sat-${mode}" data-w="${b.w}" data-h="${b.h}" data-gap="${p.gap}" data-avoid="${p.avoid}" data-inner="${p.inner}" transform="translate(${n2(b.x + b.w / 2)} ${n2(b.y + b.h / 2)})">`,
+		`<rect class="sat-box" x="${n2(-b.w / 2)}" y="${n2(-b.h / 2)}" width="${n2(b.w)}" height="${n2(b.h)}" rx="4"/>`,
+		text,
+		"</g>",
+	].join("");
+}
+
+/** 流れの番号。(0, 0) を真ん中に描き、translate で置く */
+function badgeMarkup(b: Badge, at: Pt, cls: string): string {
+	const shape =
+		b.shape === "circle" && b.text.length <= 1
+			? '<circle r="9"/>'
+			: `<rect x="${n2(-b.width / 2)}" y="-9" width="${n2(b.width)}" height="18" rx="${b.shape === "circle" ? 9 : 2.5}"/>`;
+	const sat = b.sat ? ` data-sat="${b.sat}" data-bw="${n2(b.width)}"` : "";
+	return `<g class="badge-at${cls}" transform="translate(${n2(at.x)} ${n2(at.y)})"${sat}><g class="badge" data-actor="${b.actor}">${shape}<text y="3.6" text-anchor="middle">${esc(b.text)}</text></g></g>`;
+}
+
+/**
+ * 図。class に rot を付けたものは、CSS の --rot でまとめて回す（点・線・目盛り・流れ）。
+ * 名前・外のものの箱・カテゴリ名・中心の文字は回さずに立てておき、回したときは turn.ts が置き直す。
+ */
+function renderMap(layout: MapLayout): string {
+	const { rHub } = GEOMETRY;
+	const rDial = layout.rDial;
+	const { x, y, w, h } = layout.viewBox;
+	const c = layout.compactViewBox;
+
 	// 中心から、どのリポジトリへも広がる流れのときに、中心から外へ流れる光
 	const pulses = layout.nodes
 		.map(
@@ -91,22 +185,9 @@ function renderMap(layout: MapLayout): string {
 		)
 		.join("");
 
-	// 点から、外の目盛りとラベルへ向かう点線
-	const leaders = layout.nodes
-		.map(
-			(nd) =>
-				`<line class="leader" data-node="${nd.project.id}" ${radial(nd.radius + 8, rDial - 5, nd.angle)} style="--i:${nd.index}"/>`,
-		)
-		.join("");
-
 	// 外のものの箱から目盛りの輪へ入る線（広い図と小さい図で、箱の場所が違う）
 	const ports = layout.sats
-		.flatMap((st) =>
-			(["full", "compact"] as const).map((mode) => {
-				const { from, to } = st[mode].port;
-				return `<line class="port port-${mode}" data-node="${st.actor.id}" x1="${n2(from.x)}" y1="${n2(from.y)}" x2="${n2(to.x)}" y2="${n2(to.y)}"/>`;
-			}),
-		)
+		.flatMap((st) => [portLine(st, "full"), portLine(st, "compact")])
 		.join("");
 
 	// つながりの線と、それに添える説明（ふだんは隠し、選んだときに出す）
@@ -124,13 +205,6 @@ function renderMap(layout: MapLayout): string {
 				: `data-link="${pl.link}"`;
 			return `<text class="edge-label" data-flow="${pl.flow}" data-leg="${pl.leg}" data-to="${pl.to}" ${on} x="${n2(pl.at.x)}" y="${n2(pl.at.y + 4)}" text-anchor="middle">${esc(pl.text)}</text>`;
 		})
-		.join("");
-
-	const cats = layout.categories
-		.map(
-			(cl) =>
-				`<text class="cat-label" data-cat="${cl.category.id}" transform="translate(${cl.label.x} ${cl.label.y}) rotate(${cl.label.rotate})" text-anchor="${cl.label.anchor}">${esc(cl.category.label.toUpperCase())}</text>`,
-		)
 		.join("");
 
 	const neighbors = new Map<string, Set<string>>();
@@ -151,39 +225,31 @@ function renderMap(layout: MapLayout): string {
 	}
 	const near = (id: string) => [...(neighbors.get(id) ?? [])].join(" ");
 
-	const label = (lb: NodeLayout["label"], name: string) =>
-		`<text class="node-name" x="${lb.x.toFixed(1)}" y="${lb.nameY.toFixed(1)}" text-anchor="${lb.anchor}" font-size="${nameSize}">${esc(name)}</text>`;
-	const hitBox = (lb: NodeLayout["label"]) =>
-		`<rect class="node-hit" x="${(lb.box.x - 6).toFixed(1)}" y="${(lb.box.y - 4).toFixed(1)}" width="${(lb.box.w + 12).toFixed(1)}" height="${(lb.box.h + 8).toFixed(1)}"/>`;
-
+	// リポジトリ: 点は回す図の中に、名前は回さずに置く（広い図と小さい図で、名前の大きさと場所が違う）
 	const repoNodes = layout.nodes.map((nd) => {
 		const p = nd.project;
 		const primary = p.links[0]?.href ?? org.github;
 		const { x: px, y: py } = nd.pos;
 		return [
 			`<a class="node" href="${esc(primary)}" data-id="${p.id}" data-type="repo" data-cat="${p.category}" data-members="${esc(p.members.join(" "))}" data-near="${near(p.id)}" data-angle="${nd.angle.toFixed(2)}" data-status="${p.status}" style="--i:${nd.index}" aria-label="${esc(`${pad2(nd.index)} ${p.name}, ${p.kind}`)}">`,
-			hitBox(nd.label),
+			'<g class="rot">',
 			`<circle class="node-hit" cx="${n2(px)}" cy="${n2(py)}" r="18"/>`,
 			`<circle class="node-ring" cx="${n2(px)}" cy="${n2(py)}" r="10.5"/>`,
 			`<circle class="node-dot" cx="${n2(px)}" cy="${n2(py)}" r="4.5"/>`,
-			label(nd.label, p.name),
-			`<text class="node-num" x="${nd.compactNum.x.toFixed(1)}" y="${(nd.compactNum.y + compactNumSize * 0.36).toFixed(1)}" text-anchor="middle" font-size="${compactNumSize}">${pad2(nd.index)}</text>`,
+			"</g>",
+			nameLabel(nd, "full"),
+			nameLabel(nd, "compact"),
 			"</a>",
 		].join("");
 	});
 
-	// 外のもの: 輪の外の箱。小さい図では、名前だけを大きく書いた箱を輪のすぐ外に出す
+	// 外のもの: 輪の外の箱。小さい図では、名前を大きく書いた箱を、名前とぶつからない所に出す
 	const satNodes = layout.sats.map((st, i) => {
 		const a = st.actor;
-		const b = st.full.box;
-		const cb = st.compact.box;
-		const name = esc(a.name.toUpperCase());
 		return [
 			`<a class="node node-ext" href="#${a.id}" data-id="${a.id}" data-type="ext" data-near="${near(a.id)}" data-angle="${st.angle.toFixed(2)}" style="--i:${layout.nodes.length + i}" aria-label="${esc(`${a.name}, ${a.kind}`)}">`,
-			`<g class="sat-full"><rect class="sat-box" x="${n2(b.x)}" y="${n2(b.y)}" width="${n2(b.w)}" height="${n2(b.h)}" rx="4"/>`,
-			`<text class="sat-name" x="${n2(b.x + b.w / 2)}" y="${n2(b.y + b.h / 2 + 4.2)}" text-anchor="middle">${name}</text></g>`,
-			`<g class="sat-compact"><rect class="sat-box" x="${n2(cb.x)}" y="${n2(cb.y)}" width="${n2(cb.w)}" height="${n2(cb.h)}" rx="4"/>`,
-			`<text class="sat-cname" x="${n2(cb.x + cb.w / 2)}" y="${n2(cb.y + cb.h / 2 + 6)}" text-anchor="middle">${name}</text></g>`,
+			satGroup(st, "full"),
+			satGroup(st, "compact"),
 			"</a>",
 		].join("");
 	});
@@ -193,22 +259,15 @@ function renderMap(layout: MapLayout): string {
 		.map((fl) =>
 			[
 				`<g class="flow-badges" data-flow="${fl.flow.id}">`,
-				...fl.badges.flatMap((b) => {
-					const wide = b.text.length > 1;
-					const bw = wide ? 10 + b.text.length * 5.6 : 18;
-					const one = (at: { x: number; y: number }, cls: string) => {
-						const shape =
-							b.shape === "circle" && !wide
-								? `<circle cx="${n2(at.x)}" cy="${n2(at.y)}" r="9"/>`
-								: `<rect x="${n2(at.x - bw / 2)}" y="${n2(at.y - 9)}" width="${n2(bw)}" height="18" rx="${b.shape === "circle" ? 9 : 2.5}"/>`;
-						return `<g class="badge${cls}" data-actor="${b.actor}">${shape}<text x="${n2(at.x)}" y="${n2(at.y + 3.6)}" text-anchor="middle">${esc(b.text)}</text></g>`;
-					};
-					// 外のものの箱は、広い図と小さい図で場所が違うので、番号も 2 つ置く
-					const moves = b.at.x !== b.compactAt.x || b.at.y !== b.compactAt.y;
-					return moves
-						? [one(b.at, " badge-full"), one(b.compactAt, " badge-compact")]
-						: [one(b.at, "")];
-				}),
+				// 外のものの箱は、広い図と小さい図で場所が違うので、番号も 2 つ置く
+				...fl.badges.flatMap((b) =>
+					b.sat
+						? [
+								badgeMarkup(b, b.at, " badge-full"),
+								badgeMarkup(b, b.compactAt, " badge-compact"),
+							]
+						: [badgeMarkup(b, b.at, "")],
+				),
 				"</g>",
 			].join(""),
 		)
@@ -221,17 +280,17 @@ function renderMap(layout: MapLayout): string {
 		.join("");
 
 	return [
-		`<svg class="map-svg" viewBox="${x} ${y} ${w} ${h}" data-viewbox-full="${x} ${y} ${w} ${h}" data-viewbox-compact="${c.x} ${c.y} ${c.w} ${c.h}" role="group" aria-label="${esc(`Map of ${org.name}: GitHub at the center, ${projects.length} repositories in ${categories.length} categories, and the services around them.`)}">`,
-		`<g class="map-dial"><circle class="orbit" r="${rDial}" pathLength="1"/>${ticks}</g>`,
-		`<g class="map-tracks">${tracks}${pulses}</g>`,
-		`<g class="map-leaders">${leaders}${ports}</g>`,
-		`<g class="map-links">${linkPaths}</g>`,
-		`<a class="map-hub" href="${org.github}" ${ext} data-id="${layout.hubId}" aria-label="${esc(org.name)} on GitHub"><circle class="hub-hit" r="${rHub + 6}"/><circle class="hub-ring" r="${rHub}" pathLength="1"/>${markGroup(rHub * 1.12)}<path id="hub-caption" class="hub-caption-path" d="${layout.hubCaption.path}"/><text class="hub-caption"><textPath href="#hub-caption" startOffset="50%" text-anchor="middle">${esc(layout.hubCaption.text)}</textPath></text></a>`,
-		`<g class="map-cats">${cats}</g>`,
+		`<svg class="map-svg" viewBox="${x} ${y} ${w} ${h}" data-viewbox-full="${x} ${y} ${w} ${h}" data-viewbox-compact="${c.x} ${c.y} ${c.w} ${c.h}" data-r-dial="${rDial}" data-r-hub="${rHub}" data-compact-turn="${layout.compactTurn}" style="--rot-compact:${layout.compactTurn}deg" role="group" aria-label="${esc(`Map of ${org.name}: GitHub at the center, ${projects.length} repositories in ${categories.length} categories, and the services around them. Drag to turn it.`)}">`,
+		`<g class="map-dial rot"><circle class="orbit" r="${rDial}" pathLength="1"/>${dialTicks(layout)}</g>`,
+		`<g class="map-tracks rot">${trackPaths(layout)}${pulses}</g>`,
+		`<g class="map-leaders rot">${leaderLines(layout)}${ports}</g>`,
+		`<g class="map-links rot">${linkPaths}</g>`,
+		`<a class="map-hub" href="${org.github}" ${ext} data-id="${layout.hubId}" aria-label="${esc(org.name)} on GitHub">${hubInner(layout)}</a>`,
+		`<g class="map-cats">${catLabels(layout)}</g>`,
 		`<g class="map-nodes">${repoNodes.join("")}${satNodes.join("")}</g>`,
-		`<g class="map-labels" aria-hidden="true">${pills}</g>`,
-		`<g class="map-flow" aria-hidden="true">${routes}${badges}<circle class="flow-dot" r="3.6"/></g>`,
-		`<g class="map-marker" aria-hidden="true"><path d="M0 ${-(rDial - 1)}l-4.5 -8h9z"/></g>`,
+		`<g class="map-labels rot" aria-hidden="true">${pills}</g>`,
+		`<g class="map-flow rot" aria-hidden="true">${routes}${badges}<circle class="flow-dot" r="3.6"/></g>`,
+		`<g class="rot" aria-hidden="true"><g class="map-marker"><path d="M0 ${-(rDial - 1)}l-4.5 -8h9z"/></g></g>`,
 		"</svg>",
 	].join("");
 }
@@ -254,19 +313,7 @@ function flowRow(f: Flow): string {
 	return `<li><a class="flow-row" href="#flow-${f.id}" data-flow-link="${f.id}"><span class="flow-name">${esc(f.name)}</span>${signature(f)}</a></li>`;
 }
 
-/** スマートフォンの小さい図（番号だけ）で使う、番号と名前の対応 */
-function renderKey(layout: MapLayout): string {
-	return [
-		'<ol class="ov-key" aria-label="Repositories">',
-		...layout.nodes.map(
-			(nd) =>
-				`<li><a href="${esc(nd.project.links[0]?.href ?? org.github)}" data-select="${nd.project.id}"><span class="key-num">${pad2(nd.index)}</span>${esc(nd.project.name)}</a></li>`,
-		),
-		"</ol>",
-	].join("");
-}
-
-function renderOverview(layout: MapLayout): string {
+function renderOverview(): string {
 	return [
 		'<div class="sheet-overview">',
 		'<div class="ov-head">',
@@ -274,7 +321,6 @@ function renderOverview(layout: MapLayout): string {
 		"</div>",
 		'<div class="ov-body">',
 		`<nav class="ov-flows" aria-label="Flows"><ol class="flow-list">${flows.map(flowRow).join("")}</ol></nav>`,
-		renderKey(layout),
 		'<ul class="member-list" aria-label="Members">',
 		...members.map(
 			(m) =>
@@ -487,12 +533,13 @@ export function renderApp(): string {
 		`<a class="brand" href="./" aria-label="${esc(org.name)}">${markSvg("brand-mark")}<span>${esc(org.name)}</span></a>`,
 		'<nav class="top-nav" aria-label="Links">',
 		`<a href="${org.github}" ${ext}>GitHub<span aria-hidden="true"> ↗</span></a>`,
-		'<button class="theme" type="button" data-theme-toggle aria-label="Color theme: Auto"><span class="theme-icon" aria-hidden="true"></span><span class="theme-text">Auto</span></button>',
+		// 今の色の名前を出す。どちらを出すかは CSS が決めるので、JavaScript が動く前から合う
+		'<button class="theme" type="button" data-theme-toggle aria-label="Color theme: Dark"><span class="theme-icon" aria-hidden="true"></span><span class="theme-text theme-light">Light</span><span class="theme-text theme-dark">Dark</span></button>',
 		"</nav>",
 		"</header>",
 		'<main class="hero">',
 		'<aside class="sheet" aria-label="Details">',
-		renderOverview(layout),
+		renderOverview(),
 		...layout.nodes.map(renderArticle),
 		...layout.sats.map(renderExtArticle),
 		...flows.map(renderFlowArticle),

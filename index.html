@@ -5,9 +5,8 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<title>4rtofl</title>
 		<meta name="description" content="The repositories of 4rtofl and how they connect, in one map." />
-		<meta name="color-scheme" content="light dark" />
-		<meta name="theme-color" content="#f2f1ec" media="(prefers-color-scheme: light)" />
-		<meta name="theme-color" content="#0e0f11" media="(prefers-color-scheme: dark)" />
+		<meta name="color-scheme" content="dark" />
+		<meta name="theme-color" content="#0e0f11" />
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 		<link rel="canonical" href="https://4rtofl.org/" />
@@ -21,10 +20,12 @@
 		<meta property="og:image:height" content="630" />
 		<meta name="twitter:card" content="summary_large_image" />
 		<script>
-			// Apply the saved theme before the first paint
+			// The site starts dark. Apply a saved light theme before the first paint
 			try {
-				const t = localStorage.getItem("theme");
-				if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+				if (localStorage.getItem("theme") === "light") {
+					document.documentElement.dataset.theme = "light";
+					document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#f2f1ec");
+				}
 			} catch {}
 			if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
 				document.documentElement.classList.add("is-intro");
