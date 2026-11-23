@@ -18,7 +18,7 @@ import {
 	aws_s3_deployment as s3deploy,
 } from "aws-cdk-lib";
 import type { Construct } from "constructs";
-import { scannerFunctionCode } from "./scanner.ts";
+import { scannerRequestCode, scannerResponseCode } from "./scanner.ts";
 
 /** npm run build が書き出すフォルダ */
 export const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
@@ -45,9 +45,13 @@ export class SiteStack extends Stack {
 			removalPolicy: RemovalPolicy.RETAIN,
 		});
 
-		// .env などを探しに来るアクセスに、S3 へ取りに行かずアスキーアートを返す（scanner.ts）
-		const scannerResponse = new cloudfront.Function(this, "ScannerResponse", {
-			code: cloudfront.FunctionCode.fromInline(scannerFunctionCode()),
+		// .env などを探しに来るアクセスを、アスキーアートのページ（public/nice-try.html）に読み替え、404 で返す（scanner.ts）
+		const scannerRequest = new cloudfront.Function(this, "ScannerRequest", {
+			code: cloudfront.FunctionCode.fromInline(scannerRequestCode()),
+			runtime: cloudfront.FunctionRuntime.JS_2_0,
+		});
+		const scannerResponse = new cloudfront.Function(this, "ScannerStatus", {
+			code: cloudfront.FunctionCode.fromInline(scannerResponseCode()),
 			runtime: cloudfront.FunctionRuntime.JS_2_0,
 		});
 
@@ -74,8 +78,12 @@ export class SiteStack extends Stack {
 				compress: true,
 				functionAssociations: [
 					{
-						function: scannerResponse,
+						function: scannerRequest,
 						eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+					},
+					{
+						function: scannerResponse,
+						eventType: cloudfront.FunctionEventType.VIEWER_RESPONSE,
 					},
 				],
 			},
