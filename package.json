@@ -7,7 +7,8 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"typecheck": "tsc --noEmit",
-		"check": "biome check . && tsc --noEmit",
+		"test": "node --test 'infra/*.test.ts'",
+		"check": "biome check . && tsc --noEmit && npm test",
 		"og": "node scripts/og.mjs",
 		"synth": "npm run build && cdk synth --quiet",
 		"deploy": "npm run build && cdk deploy"
