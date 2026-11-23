@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 import { type ProfileTheme, renderProfileMap } from "./src/profile.ts";
 import { renderApp } from "./src/render.ts";
@@ -10,6 +12,27 @@ function prerender(): Plugin {
 		transformIndexHtml: {
 			order: "pre",
 			handler: (html) => html.replace("<!--app-->", renderApp()),
+		},
+	};
+}
+
+// リンクを貼ったときの画像（og:image）の URL に、画像の中身から作った版（?v=...）を付ける。
+// Discord などは、一度読んだ URL の画像を覚えていて使い続けるので、画像を作り直したら URL も変えて、新しい画像を読ませる。
+function ogImageVersion(): Plugin {
+	return {
+		name: "og-image-version",
+		transformIndexHtml: {
+			order: "pre",
+			handler: (html, ctx) => {
+				// サイトのページ（index.html）だけに付ける。lab/ の試しのページには og:image が無い
+				if (ctx.path !== "/index.html") return html;
+				const png = readFileSync(new URL("./public/og.png", import.meta.url));
+				const v = createHash("sha256").update(png).digest("hex").slice(0, 8);
+				const tag = /(<meta property="og:image" content="[^"?]+\/og\.png)"/;
+				if (!tag.test(html))
+					throw new Error("index.html に og.png の og:image が見つかりません");
+				return html.replace(tag, `$1?v=${v}"`);
+			},
 		},
 	};
 }
@@ -41,7 +64,7 @@ function githubProfile(): Plugin {
 }
 
 export default defineConfig({
-	plugins: [prerender(), githubProfile()],
+	plugins: [prerender(), ogImageVersion(), githubProfile()],
 	build: {
 		target: "es2022",
 	},

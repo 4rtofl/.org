@@ -85,7 +85,6 @@ a {
 	border-radius: 2px;
 }
 
-.top-nav,
 .colophon,
 .ruler-month {
 	font-family: var(--font-mono);
@@ -127,63 +126,59 @@ a {
 .top-nav {
 	display: flex;
 	align-items: center;
-	gap: 2px;
-	font-size: 11px;
 }
 
-.top-nav a,
+/* 色の切り替え: 今の色をアイコンで出す丸いボタン（Dark は月、Light は太陽） */
 .theme {
 	display: inline-flex;
 	align-items: center;
-	gap: 8px;
+	justify-content: center;
+	width: 32px;
 	height: 32px;
-	padding: 0 12px;
+	padding: 0;
 	border-radius: 999px;
 	color: var(--ink-2);
+	background: none;
+	border: 1px solid var(--rule);
+	cursor: pointer;
 	transition:
 		color 0.2s,
 		background-color 0.2s;
 }
 
-.top-nav a:hover,
 .theme:hover {
 	color: var(--ink);
 	background: var(--paper-2);
 }
 
-.theme {
-	font: inherit;
-	letter-spacing: inherit;
-	text-transform: inherit;
-	background: none;
-	border: 1px solid var(--rule);
-	margin-left: 8px;
-	cursor: pointer;
-}
-
-/* 今の色を出す: Dark は塗った丸、Light は白抜きの丸 */
 .theme-icon {
-	width: 11px;
-	height: 11px;
-	border-radius: 50%;
-	border: 1px solid currentColor;
-	background: currentColor;
+	display: block;
+	overflow: visible;
 }
 
-.theme-light {
-	display: none;
+/* 押すと、今の色のアイコンが回りながら消え、次の色のアイコンが回りながら出る */
+.theme-moon,
+.theme-sun {
+	transform-box: view-box;
+	transform-origin: 12px 12px;
+	transition:
+		opacity 0.3s var(--ease),
+		transform 0.55s var(--ease);
 }
 
-:root[data-theme="light"] .theme-icon {
-	background: transparent;
+.theme-sun {
+	opacity: 0;
+	transform: rotate(-90deg) scale(0.4);
 }
 
-:root[data-theme="light"] .theme-dark {
-	display: none;
+:root[data-theme="light"] .theme-sun {
+	opacity: 1;
+	transform: none;
 }
 
-:root[data-theme="light"] .theme-light {
-	display: inline;
+:root[data-theme="light"] .theme-moon {
+	opacity: 0;
+	transform: rotate(90deg) scale(0.4);
 }
 
 /* ---------- 説明欄と図 ---------- */
@@ -314,7 +309,7 @@ a {
 	padding-left: 10px;
 }
 
-/* 流れの手順を、図と同じ形（リポジトリは丸、外のものは四角、中心は輪）で並べた印 */
+/* 流れの手順を、アイコン（GitHub・Discord・Claude など。リポジトリは repo）で順に並べ、線でつないだ印 */
 .flow-sig {
 	flex: none;
 	overflow: visible;
@@ -325,17 +320,6 @@ a {
 .flow-sig line {
 	stroke: currentColor;
 	stroke-width: 1;
-}
-
-.flow-sig circle,
-.flow-sig rect {
-	fill: currentColor;
-}
-
-.flow-sig .sig-hub {
-	fill: var(--paper);
-	stroke: currentColor;
-	stroke-width: 1.2;
 }
 
 .flow-row:hover .flow-sig,
@@ -627,6 +611,53 @@ a {
 	background: var(--ink);
 }
 
+/* リポジトリを 1 つ選んでいる間: 作った日から今日までを太い線で引き、作った日の日付を出す。
+   ほかのリポジトリの印と、作った日より前の目盛りは薄くする */
+.ruler-span,
+.ruler-date {
+	position: absolute;
+	display: none;
+	pointer-events: none;
+}
+
+.ruler.is-single .ruler-span,
+.ruler.is-single .ruler-date {
+	display: block;
+}
+
+.ruler-span {
+	background: var(--ink);
+}
+
+.ruler-date {
+	font-family: var(--font-mono);
+	font-size: 9.5px;
+	font-weight: 600;
+	line-height: 1;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	color: var(--ink);
+	animation: fade-in 0.5s var(--ease) 0.15s backwards;
+}
+
+.ruler.is-single .ruler-mark:not(.is-sel, .is-on, :hover)::before {
+	background: var(--rule-strong);
+}
+
+.ruler.is-single .ruler-ticks {
+	-webkit-mask-image: linear-gradient(
+		to bottom,
+		rgb(0 0 0 / 0.35) calc(var(--from) * 1%),
+		#000 calc(var(--from) * 1%)
+	);
+	mask-image: linear-gradient(
+		to bottom,
+		rgb(0 0 0 / 0.35) calc(var(--from) * 1%),
+		#000 calc(var(--from) * 1%)
+	);
+}
+
 /* 縦の目盛り（広い画面）: 上が始まり、印は右へ伸びる */
 .ruler-h {
 	display: none;
@@ -654,11 +685,80 @@ a {
 }
 
 .ruler .ruler-mark:hover::before,
-.ruler .ruler-mark.is-on::before {
+.ruler .ruler-mark.is-on::before,
+.ruler .ruler-mark.is-sel::before {
 	width: 20px;
 }
 
+.ruler .ruler-mark.is-sel::before {
+	background: var(--ink);
+}
+
+/* 作った日から下（今日）へ、線を引いていく */
+.ruler .ruler-span {
+	left: 11px;
+	width: 2px;
+	top: calc(var(--from) * 1%);
+	bottom: 0;
+	transform-origin: top;
+	animation: ruler-draw-v 0.8s var(--ease) backwards;
+}
+
+.ruler .ruler-date {
+	left: 38px;
+	top: calc(var(--from) * 1%);
+	transform: translateY(-50%);
+}
+
+@keyframes ruler-draw-v {
+	from {
+		transform: scaleY(0);
+	}
+}
+
+@keyframes ruler-draw-h {
+	from {
+		transform: scaleX(0);
+	}
+}
+
+/* ---------- 画面全体に重ねる細かい粒（grain.ts） ---------- */
+
+/* overlay で重ねるので、地や文字の明るさは変えずに、ざらつきだけを足す。
+   粒を入れ替えるときに絵をずらしても端に隙間ができないよう、画面より絵 1 枚ぶん大きくする */
+.grain {
+	position: fixed;
+	inset: calc(var(--grain-tile, 256px) * -1);
+	z-index: 90;
+	pointer-events: none;
+	background-repeat: repeat;
+	background-size: var(--grain-tile, 256px);
+	image-rendering: pixelated;
+	mix-blend-mode: overlay;
+	opacity: 0.9;
+	will-change: transform;
+}
+
+/* 強いコントラストを選んでいる人と、印刷には出さない */
+@media (prefers-contrast: more) {
+	.grain {
+		display: none;
+	}
+}
+
+@media print {
+	.grain {
+		display: none;
+	}
+}
+
 /* ---------- マウスについて動く丸（ZERO TOKYO のホームページと同じ動き） ---------- */
+
+/* マウスの矢印は隠し、ついて動く丸を矢印の代わりにする（main.ts が丸を出せたときに has-cursor を付ける） */
+.has-cursor,
+.has-cursor * {
+	cursor: none !important;
+}
 
 .cursor {
 	position: fixed;
@@ -702,13 +802,19 @@ a {
 	height: 30px;
 }
 
+/* 図をつかんで回している間 */
+.cursor.is-grab::before {
+	width: 24px;
+	height: 24px;
+}
+
 /* 中心にのせたときは、中心の輪を覆う大きさにする */
 .cursor.is-hub::before {
 	width: var(--hub, 120px);
 	height: var(--hub, 120px);
 }
 
-/* 流れの手順: 上から下へ進む線と、番号の印。リポジトリは丸、外のものは四角 */
+/* 流れの手順: 上から下へ進む線と、番号の印。何か（GitHub・Discord・リポジトリなど）は、名前の前のアイコンで出す */
 .route {
 	list-style: none;
 	margin: 6px 0 0;
@@ -795,10 +901,6 @@ a {
 	transition: transform 0.3s var(--ease);
 }
 
-.stop[data-kind="ext"] > .stop-mark {
-	border-radius: 3px;
-}
-
 /* 横から合流する（in）・横へ分かれる（out）流れ */
 .branch {
 	margin: 12px 0 0 28px;
@@ -812,10 +914,6 @@ a {
 	background: var(--paper);
 	border: 1.5px solid var(--ink);
 	box-shadow: 0 0 0 2px var(--paper);
-}
-
-.branch[data-kind="ext"] > .stop-mark {
-	border-radius: 2px;
 }
 
 .branch::after {
@@ -852,10 +950,20 @@ a {
 
 .stop-head {
 	display: flex;
-	flex-wrap: wrap;
-	align-items: baseline;
-	gap: 2px 10px;
+	align-items: center;
+	gap: 7px;
 	margin: 0 0 2px;
+}
+
+.stop-icon {
+	flex: none;
+	width: 15px;
+	height: 15px;
+}
+
+.branch .stop-icon {
+	width: 13px;
+	height: 13px;
 }
 
 .stop-name {
@@ -1091,16 +1199,15 @@ a.stop-name:hover {
 	color: var(--ink);
 }
 
-.hub-caption-path {
-	fill: none;
-	stroke: none;
+/* 中心が GitHub（4rtofl の組織）であることを示す、輪の外のアイコン。図と一緒に回り、向きは立てたままにする */
+.hub-badge {
+	rotate: calc(var(--rot) * -1);
+	transform-box: fill-box;
+	transform-origin: center;
 }
 
-.map-svg .hub-caption {
-	font-family: var(--font-mono);
-	font-size: 7.5px;
-	letter-spacing: 0.24em;
-	fill: var(--ink-2);
+.hub-badge-icon {
+	color: var(--ink);
 }
 
 .map-svg .cat-label {
@@ -1328,9 +1435,12 @@ a.stop-name:hover {
 	animation: draw 0.9s var(--ease) 0.05s backwards;
 }
 
-.is-intro .hub-mark,
-.is-intro .hub-caption {
+.is-intro .hub-mark {
 	animation: fade-in 0.9s var(--ease) 0.15s backwards;
+}
+
+.is-intro .hub-badge-at {
+	animation: fade-in 0.8s var(--ease) 0.6s backwards;
 }
 
 .is-intro .track {
@@ -1429,7 +1539,7 @@ a.stop-name:hover {
 		overflow: hidden;
 	}
 
-	/* 上の帯は置かず、GitHub と色の切り替えだけを図の右上に浮かべる */
+	/* 上の帯は置かず、色の切り替えのボタンだけを図の右上に浮かべる */
 	.top {
 		position: fixed;
 		top: 0;
@@ -1607,9 +1717,46 @@ a.stop-name:hover {
 		height: 9px;
 	}
 
-	.ruler .ruler-mark.is-on::before {
+	.ruler .ruler-mark.is-on::before,
+	.ruler .ruler-mark.is-sel::before {
 		width: 1.5px;
 		height: 18px;
+	}
+
+	/* 横の目盛り: 作った日から右（今日）へ線を引き、日付は印の下に出す */
+	.ruler.is-single .ruler-ticks {
+		-webkit-mask-image: linear-gradient(
+			to right,
+			rgb(0 0 0 / 0.35) calc(var(--from) * 1%),
+			#000 calc(var(--from) * 1%)
+		);
+		mask-image: linear-gradient(
+			to right,
+			rgb(0 0 0 / 0.35) calc(var(--from) * 1%),
+			#000 calc(var(--from) * 1%)
+		);
+	}
+
+	.ruler .ruler-span {
+		left: calc(var(--from) * 1%);
+		right: 0;
+		top: 11px;
+		bottom: auto;
+		width: auto;
+		height: 2px;
+		transform-origin: left;
+		animation-name: ruler-draw-h;
+	}
+
+	/* 日付は、月の名前の段に出す（下は説明欄に隠れるので）。月の名前は隠し、日付が端からはみ出さないよう、右へ行くほど左へずらす */
+	.ruler.is-single .ruler-month {
+		visibility: hidden;
+	}
+
+	.ruler .ruler-date {
+		left: calc(var(--from) * 1%);
+		top: -8px;
+		transform: translateX(calc(var(--from) * -1%));
 	}
 
 	.ov-flows {
@@ -1668,16 +1815,6 @@ a.stop-name:hover {
 		--top-h: 52px;
 	}
 
-	.theme-text {
-		display: none !important;
-	}
-
-	.theme {
-		width: 32px;
-		padding: 0;
-		justify-content: center;
-	}
-
 	.wordmark {
 		font-size: 60px;
 	}
@@ -1691,7 +1828,7 @@ a.stop-name:hover {
 	}
 
 	.map-svg .cat-label,
-	.map-svg .hub-caption {
+	.map-svg .hub-badge-at {
 		display: none;
 	}
 
@@ -1743,5 +1880,14 @@ a.stop-name:hover {
 		animation-duration: 0.01ms !important;
 		animation-delay: 0s !important;
 		transition-duration: 0.01ms !important;
+	}
+
+	/* マウスについて動く丸は、マウスの動きに合わせて動くものなので、動きを減らす設定でも大きさをなめらかに変える */
+	.cursor {
+		transition-duration: 0.3s !important;
+	}
+
+	.cursor::before {
+		transition-duration: 0.5s !important;
 	}
 }

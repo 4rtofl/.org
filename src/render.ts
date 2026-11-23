@@ -15,6 +15,7 @@ import {
 	type Stop,
 	statusLabel,
 } from "./data.ts";
+import { type IconName, iconSvg } from "./icons.ts";
 import {
 	type Badge,
 	GEOMETRY,
@@ -26,6 +27,7 @@ import {
 	type SatLayout,
 } from "./layout.ts";
 import { markGroup, markSvg } from "./logo.ts";
+import { polar } from "./place.ts";
 
 export const esc = (s: string) =>
 	s
@@ -45,6 +47,8 @@ const memberById = (id: string) => members.find((m) => m.id === id) as Member;
 
 /** 図の上の id（リポジトリは projects の id、外のものは actors の id） */
 const placeOf = (a: Actor) => a.project ?? a.id;
+/** 流れの手順と一覧の印に出すアイコン */
+const iconOf = (a: Actor): IconName => a.icon ?? (a.project ? "repo" : "box");
 
 /** その流れに出てくるもの（合流するもの・分かれる先も含む） */
 const actorsIn = (f: Flow) =>
@@ -115,16 +119,19 @@ export function catLabels(layout: MapLayout): string {
 		.join("");
 }
 
-/** 中心の輪とロゴと、輪に沿って書く「GITHUB」。ロゴは図を回しても立てたままにする */
+/**
+ * 中心の輪とロゴと、輪の外に置く GitHub のアイコン。ロゴは図を回しても立てたままにする。
+ * アイコンは、線のない向きに、輪から少し離して置く（中心にのせたときにマウスの丸が覆う範囲より外）。
+ * 図を回すと輪のまわりを一緒に回り、向きだけは CSS で立てたままにする。
+ */
 export function hubInner(layout: MapLayout): string {
 	const { rHub } = GEOMETRY;
-	const cap = layout.hubCaption;
+	const at = polar(rHub + 17, layout.hubBadge.angle);
 	return [
 		`<circle class="hub-hit" r="${rHub + 6}"/>`,
 		`<circle class="hub-ring" r="${rHub}" pathLength="1"/>`,
 		markGroup(rHub * 1.12),
-		`<path id="hub-caption" class="hub-caption-path" d="${cap.path}" data-angle="${cap.angle}" data-span="${cap.span}" data-r="${cap.r}"/>`,
-		`<text class="hub-caption"><textPath href="#hub-caption" startOffset="50%" text-anchor="middle">${esc(cap.text)}</textPath></text>`,
+		`<g class="hub-badge-at rot"><g transform="translate(${n2(at.x)} ${n2(at.y)})"><g class="hub-badge">${iconSvg("github", 'class="hub-badge-icon" x="-8" y="-8" width="16" height="16"')}</g></g></g>`,
 	].join("");
 }
 
@@ -157,12 +164,12 @@ export function satGroup(st: SatLayout, mode: Mode): string {
 	].join("");
 }
 
-/** 流れの番号。(0, 0) を真ん中に描き、translate で置く */
+/** 流れの番号。(0, 0) を真ん中に描き、translate で置く。1 文字なら丸、2 文字以上なら角の丸い四角 */
 function badgeMarkup(b: Badge, at: Pt, cls: string): string {
 	const shape =
-		b.shape === "circle" && b.text.length <= 1
+		b.text.length <= 1
 			? '<circle r="9"/>'
-			: `<rect x="${n2(-b.width / 2)}" y="-9" width="${n2(b.width)}" height="18" rx="${b.shape === "circle" ? 9 : 2.5}"/>`;
+			: `<rect x="${n2(-b.width / 2)}" y="-9" width="${n2(b.width)}" height="18" rx="9"/>`;
 	const sat = b.sat ? ` data-sat="${b.sat}" data-bw="${n2(b.width)}"` : "";
 	return `<g class="badge-at${cls}" transform="translate(${n2(at.x)} ${n2(at.y)})"${sat}><g class="badge" data-actor="${b.actor}">${shape}<text y="3.6" text-anchor="middle">${esc(b.text)}</text></g></g>`;
 }
@@ -295,18 +302,25 @@ function renderMap(layout: MapLayout): string {
 	].join("");
 }
 
-/** 流れの手順を、図と同じ形（リポジトリは丸、外のものは四角、中心は輪）で並べた小さな印 */
+/** 流れの手順を、アイコン（GitHub・Discord・Claude など。リポジトリは repo）で順に並べ、線でつないだ小さな印 */
 function signature(f: Flow): string {
-	const step = 13;
-	const w = 10 + (f.stops.length - 1) * step;
-	const marks = f.stops.map((s, i) => {
-		const a = actorById(s.actor);
-		const x = 5 + i * step;
-		if (a.hub) return `<circle class="sig-hub" cx="${x}" cy="5" r="3"/>`;
-		if (a.project) return `<circle cx="${x}" cy="5" r="3.2"/>`;
-		return `<rect x="${x - 3.2}" y="1.8" width="6.4" height="6.4" rx="1"/>`;
-	});
-	return `<svg class="flow-sig" viewBox="0 0 ${w} 10" width="${w}" height="10" aria-hidden="true"><line x1="5" y1="5" x2="${w - 5}" y2="5"/>${marks.join("")}</svg>`;
+	const size = 13;
+	const step = 22;
+	const w = size + (f.stops.length - 1) * step;
+	const mid = size / 2;
+	const lines = f.stops
+		.slice(1)
+		.map(
+			(_, i) =>
+				`<line x1="${n2(mid + i * step + mid + 3)}" y1="${mid}" x2="${n2(mid + (i + 1) * step - mid - 3)}" y2="${mid}"/>`,
+		);
+	const marks = f.stops.map((s, i) =>
+		iconSvg(
+			iconOf(actorById(s.actor)),
+			`x="${i * step}" y="0" width="${size}" height="${size}"`,
+		),
+	);
+	return `<svg class="flow-sig" viewBox="0 0 ${w} ${size}" width="${w}" height="${size}" aria-hidden="true">${lines.join("")}${marks.join("")}</svg>`;
 }
 
 function flowRow(f: Flow): string {
@@ -351,6 +365,7 @@ const MONTHS = [
 /**
  * 欄と図の間の目盛り。上が組織の始まり（org.started）、下が今日で、1 日ごとに目盛りを刻む。
  * 各リポジトリを作った日には長い目盛りを付け、のせるとその点を強調する。
+ * リポジトリを 1 つ選んでいる間は、作った日から今日までを太い線で引き、作った日の日付を出す（main.ts が切り替える）。
  */
 function renderRuler(): string {
 	const DAY = 86_400_000;
@@ -387,16 +402,18 @@ function renderRuler(): string {
 		byDay.set(p.created, [...(byDay.get(p.created) ?? []), p.id]);
 	const marks = [...byDay]
 		.sort(([a], [b]) => a.localeCompare(b))
-		.map(
-			([d, ids]) =>
-				`<span class="ruler-mark" data-repos="${ids.join(" ")}" style="--at:${pct(index(day(d)))}"></span>`,
-		);
+		.map(([d, ids]) => {
+			const t = new Date(day(d));
+			const date = `${MONTHS[t.getUTCMonth()]} ${t.getUTCDate()}`;
+			return `<span class="ruler-mark" data-repos="${ids.join(" ")}" data-date="${date}" style="--at:${pct(index(day(d)))}"></span>`;
+		});
 	return [
 		'<div class="ruler" aria-hidden="true">',
 		`<svg class="ruler-ticks ruler-v" viewBox="0 0 24 ${last}" preserveAspectRatio="none"><line class="ruler-line" x1="12" y1="0" x2="12" y2="${last}"/><path d="${daysV}"/><path d="${monthsV}"/></svg>`,
 		`<svg class="ruler-ticks ruler-h" viewBox="0 0 ${last} 24" preserveAspectRatio="none"><line class="ruler-line" x1="0" y1="12" x2="${last}" y2="12"/><path d="${daysH}"/><path d="${monthsH}"/></svg>`,
 		...months,
 		...marks,
+		'<span class="ruler-span"></span><span class="ruler-date"></span>',
 		"</div>",
 	].join("");
 }
@@ -487,13 +504,15 @@ function renderStop(
 	const name = a.hub
 		? `<span class="stop-name">${esc(a.name)}</span>`
 		: `<a class="stop-name" href="${esc(project?.links[0]?.href ?? `#${id}`)}" data-select="${id}">${esc(a.name)}</a>`;
+	// 名前の前に、何か（GitHub・Discord・Claude・リポジトリなど）を表すアイコンを出す
+	const icon = iconSvg(iconOf(a), 'class="stop-icon" aria-hidden="true"');
 	return [
-		`<div class="${cls}" data-actor="${a.hub ? a.id : id}" data-kind="${a.project ? "repo" : "ext"}"${extra}>`,
+		`<div class="${cls}" data-actor="${a.hub ? a.id : id}"${extra}>`,
 		`<i class="stop-mark" aria-hidden="true">${num}</i>`,
 		cls === "branch"
 			? '<i class="branch-mask" aria-hidden="true"></i><i class="branch-arrow" aria-hidden="true"></i>'
 			: "",
-		`<p class="stop-head">${name}</p>`,
+		`<p class="stop-head">${icon}${name}</p>`,
 		`<p class="stop-text">${esc(stop.text)}</p>`,
 		"</div>",
 	].join("");
@@ -526,16 +545,27 @@ function renderFlowArticle(f: Flow): string {
 	].join("");
 }
 
+/** 色の切り替えのボタンのアイコン。月と太陽を重ねておき、CSS が今の色のほうだけを出す（形は Lucide の moon と sun、ISC） */
+const THEME_ICON = [
+	'<svg class="theme-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">',
+	'<path class="theme-moon" d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" fill="currentColor"/>',
+	'<g class="theme-sun" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">',
+	'<circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/>',
+	'<path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+	"</g>",
+	"</svg>",
+].join("");
+
 export function renderApp(): string {
 	const layout = layoutMap(categories, projects, actors, flows);
 	return [
 		'<header class="top">',
 		`<a class="brand" href="./" aria-label="${esc(org.name)}">${markSvg("brand-mark")}<span>${esc(org.name)}</span></a>`,
-		'<nav class="top-nav" aria-label="Links">',
-		`<a href="${org.github}" ${ext}>GitHub<span aria-hidden="true"> ↗</span></a>`,
-		// 今の色の名前を出す。どちらを出すかは CSS が決めるので、JavaScript が動く前から合う
-		'<button class="theme" type="button" data-theme-toggle aria-label="Color theme: Dark"><span class="theme-icon" aria-hidden="true"></span><span class="theme-text theme-light">Light</span><span class="theme-text theme-dark">Dark</span></button>',
-		"</nav>",
+		// GitHub へは図の中心から開けるので、右上には色の切り替えのボタンだけを置く。
+		// 今の色をアイコンで出す（Dark は月、Light は太陽）。どちらを出すかは CSS が決めるので、JavaScript が動く前から合う
+		'<div class="top-nav">',
+		`<button class="theme" type="button" data-theme-toggle aria-label="Color theme: Dark">${THEME_ICON}</button>`,
+		"</div>",
 		"</header>",
 		'<main class="hero">',
 		'<aside class="sheet" aria-label="Details">',

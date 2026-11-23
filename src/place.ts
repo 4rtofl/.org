@@ -1,4 +1,4 @@
-// 図の上で、名前・外のものの箱・カテゴリ名・中心の文字を置く場所を決める計算。
+// 図の上で、名前・外のものの箱・カテゴリ名を置く場所を決める計算。
 // ビルドのとき（layout.ts）と、図を回している間（turn.ts）の両方で使うので、ブラウザでも動く書き方だけにする。
 // 中心を原点、角度は真上を 0 度として時計回りに測る。
 
@@ -185,14 +185,4 @@ export function catPlace(trunk: number, side: number, rHub: number): CatPlace {
 		rotate: f2(rightHalf ? trunk - 90 : trunk + 90),
 		anchor: rightHalf ? "start" : "end",
 	};
-}
-
-/** 中心の輪の外に沿って文字を書く道。angle を真ん中に span 度の幅。下半分では、文字が逆さにならないよう反時計回りにする */
-export function captionPath(angle: number, span: number, r: number): string {
-	const n = norm(angle);
-	const bottom = n > 90 && n < 270;
-	const from = bottom ? angle + span / 2 : angle - span / 2;
-	const to = bottom ? angle - span / 2 : angle + span / 2;
-	const rr = bottom ? r + 5 : r;
-	return `M${pt(polar(rr, from))}A${rr} ${rr} 0 0 ${bottom ? 0 : 1} ${pt(polar(rr, to))}`;
 }

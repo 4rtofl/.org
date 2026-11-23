@@ -17,7 +17,6 @@ import {
 	add,
 	type Box,
 	badgeWidth,
-	captionPath,
 	catPlace,
 	deg,
 	f2 as f,
@@ -124,7 +123,6 @@ export interface Badge {
 	compactAt: Pt;
 	text: string;
 	actor: string;
-	shape: "circle" | "square";
 	/** 外のものの箱に付ける番号なら、その id（図を回すと、箱に合わせて動かす） */
 	sat?: string;
 	/** 番号の枠の幅 */
@@ -156,14 +154,8 @@ export interface MapLayout {
 	pills: PillLayout[];
 	flows: FlowLayout[];
 	categories: CategoryLayout[];
-	/** 中心の輪の外に沿って書く「GITHUB」の道（angle を真ん中に span 度、半径 r） */
-	hubCaption: {
-		path: string;
-		text: string;
-		angle: number;
-		span: number;
-		r: number;
-	};
+	/** 中心の輪の外に置く GitHub のアイコンの向き（線のない、いちばん広い間の真ん中） */
+	hubBadge: { angle: number };
 	viewBox: Box;
 	compactViewBox: Box;
 	/** 小さい図で、名前が画面の幅に収まるように図を回す角度 */
@@ -979,7 +971,6 @@ export function layoutMap(
 			const sat = sats.find((s) => s.actor.id === id);
 			const text = nums.join("·");
 			const width = badgeWidth(text);
-			const shape = projectIds.has(id) ? "circle" : "square";
 			if (sat) {
 				// 外のものの箱に付ける番号は、箱に合わせて置く。番号は回した図の中にあるので、回す前の向きの座標に直す
 				const at = satBadgeAt(sat.full.box, sat.angle, width, false);
@@ -994,7 +985,6 @@ export function layoutMap(
 					compactAt: turn(c, -compactTurn),
 					text,
 					actor: id,
-					shape,
 					sat: id,
 					width,
 				};
@@ -1003,7 +993,7 @@ export function layoutMap(
 				id === hubId
 					? hubEntry
 					: polar(placeR.get(id) ?? rRing, placeAngle.get(id) ?? 0);
-			return { at, compactAt: at, text, actor: id, shape, width };
+			return { at, compactAt: at, text, actor: id, width };
 		});
 		const actorsIn = new Set<string>();
 		for (const s of fl.stops) {
@@ -1132,7 +1122,7 @@ export function layoutMap(
 		}
 	}
 
-	// 中心の輪の外に沿って「GITHUB」と書く。線のないいちばん広い向きを探す
+	// 中心の輪の外に GitHub のアイコンを置く。線のないいちばん広い向きを探す
 	const used = [
 		...cats.map((c) => c.angle),
 		...[...spokePaths.keys()].map((id) => placeAngle.get(id) ?? 0),
@@ -1148,16 +1138,7 @@ export function layoutMap(
 			capAngle = (a + next) / 2;
 		}
 	}
-	const capText = hub ? hub.name.toUpperCase() : "";
-	const capR = rHub + 10;
-	const capSpan = deg((monoWidth(capText, 7.5) + 8) / capR);
-	const hubCaption = {
-		path: captionPath(capAngle, capSpan, capR),
-		text: capText,
-		angle: f(capAngle),
-		span: f(capSpan),
-		r: capR,
-	};
+	const hubBadge = { angle: f(capAngle) };
 
 	// 目盛り: 2.5 度ごとの細かい目盛りと、点の向きの長い目盛り
 	const ticks = [
@@ -1212,7 +1193,7 @@ export function layoutMap(
 		pills,
 		flows: flowLayouts,
 		categories: cats,
-		hubCaption,
+		hubBadge,
 		viewBox,
 		compactViewBox,
 		compactTurn,

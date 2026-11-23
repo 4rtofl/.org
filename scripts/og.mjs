@@ -1,6 +1,6 @@
 // リンクを貼ったときの画像（public/og.png、1200×630）と、ホーム画面用のアイコン
 // （public/apple-touch-icon.png、180×180）を、ビルドしたサイトの見た目から作り直す。
-// リンクの画像は、サイトの初めの表示と同じ Dark で作る。
+// リンクの画像は、サイトの初めの表示と同じ Dark で作る。画面全体に重ねる細かい粒は入れない（画像が大きくなり、縮めて出したときに濁るので）。
 // 使い方: npm run build && npm run og
 // Chrome の場所は CHROME_PATH で変えられる（既定は macOS の Google Chrome）。
 
@@ -31,7 +31,7 @@ try {
 	await page.addStyleTag({
 		content: `
 			:root { --sheet-w: 430px !important; }
-			.top, .ov-body, .sheet-project { display: none !important; }
+			.top, .ov-body, .sheet-project, .grain { display: none !important; }
 			.hero { grid-template-columns: var(--sheet-w) 1fr !important; min-height: 630px !important; height: 630px; border: 0 !important; }
 			.sheet { padding: 56px 48px !important; display: flex !important; flex-direction: column; justify-content: center; }
 			.sheet-overview { display: block !important; flex: none !important; }

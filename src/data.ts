@@ -4,6 +4,8 @@
 // 円の図の上での並び順は、categories の順 → 各カテゴリの中の projects の順（時計回り）。
 // 外のもの（Discord など）は、カテゴリの間の、つながる相手に近いところへ自動で置く。
 
+import type { IconName } from "./icons.ts";
+
 export type CategoryId = "agent" | "services" | "apps" | "ops";
 
 export type Status = "active" | "early" | "design";
@@ -61,6 +63,8 @@ export interface Actor {
 	hub?: true;
 	/** 外のもの（図では輪の外の箱で描く）の 1 文の説明。説明欄に出す */
 	about?: string;
+	/** 流れの手順と一覧の印に出すアイコン（icons.ts）。書かなければ、リポジトリは repo、外のものは box */
+	icon?: IconName;
 	links?: ProjectLink[];
 }
 
@@ -264,7 +268,15 @@ export const projects: Project[] = [
 		runsOn: ["Chrome"],
 		status: "active",
 		members: ["totosuki"],
-		links: [repo("Hitokoto")],
+		links: [
+			repo("Hitokoto"),
+			{
+				label: "Chrome Web Store",
+				href: "https://chromewebstore.google.com/detail/hitokoto/njpihdfpndlahcfbonfbdfcgobkdcdkg",
+				// 名前でどこか分かり、ドメインは長くて途中で切れるので、補足は出さない
+				note: "",
+			},
+		],
 	},
 	{
 		id: "konv",
@@ -277,7 +289,15 @@ export const projects: Project[] = [
 		runsOn: ["Chrome"],
 		status: "active",
 		members: ["yu1sh"],
-		links: [repo("Konv")],
+		links: [
+			repo("Konv"),
+			{
+				label: "Chrome Web Store",
+				href: "https://chromewebstore.google.com/detail/saveimageasanyfile/iindbmfojjjlagdblmkklmlemoodbjmc",
+				// 名前でどこか分かり、ドメインは長くて途中で切れるので、補足は出さない
+				note: "",
+			},
+		],
 	},
 	{
 		id: "audipp",
@@ -346,6 +366,7 @@ export const actors: Actor[] = [
 		id: "discord",
 		name: "Discord",
 		kind: "Server",
+		icon: "discord",
 		about: "Where the team talks. Most flows start and end here.",
 	},
 	{ id: "bobert", name: "Bobert", kind: "Discord bot", project: "bobert" },
@@ -353,6 +374,7 @@ export const actors: Actor[] = [
 		id: "bobert-agent",
 		name: "Bobert Agent",
 		kind: "Managed Agents",
+		icon: "agent",
 		about: "Started from /agent. Works on any 4rtofl repository in a sandbox.",
 		links: [repo("Bobert")],
 	},
@@ -363,6 +385,7 @@ export const actors: Actor[] = [
 		name: "GitHub",
 		kind: "4rtofl",
 		hub: true,
+		icon: "github",
 		links: [{ label: "GitHub", href: GITHUB, note: "github.com/4rtofl" }],
 	},
 	{
@@ -387,6 +410,7 @@ export const actors: Actor[] = [
 		id: "claude",
 		name: "Claude",
 		kind: "Anthropic",
+		icon: "claude",
 		about:
 			"Claude Code on members' machines, and the models behind Bobert and the reviewer.",
 	},

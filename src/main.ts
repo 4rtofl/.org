@@ -1,14 +1,16 @@
 import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
 import "./style.css";
+import { setupGrain } from "./grain.ts";
 import { setupTurn } from "./turn.ts";
 
 // ビルドのときに書き出した HTML に、操作を足す。
 // - 点（リポジトリ）と箱（外のもの）: のせると、つながる相手と線を強調する。押すと、説明欄に説明を出し、URL の # を変える。
 // - 流れ: 一覧の行にのせるか押すと、図にその流れの線と順番の番号を出し、点を道に沿って動かす。
 // - 欄と図の間の目盛り: リポジトリを作った日の目盛りにのせると、その点を強調する。
-// - マウス: 小さな丸が少し遅れてついて動き、押せるものの上で広がる（ZERO TOKYO のホームページと同じ動き）。
-// - 図を回す動きは turn.ts。
+//   リポジトリを 1 つ選んでいる間は、作った日から今日までを太い線で引き、作った日の日付を出す。
+// - マウス: 矢印は隠し、小さな丸が少し遅れてなめらかについて動き、押せるものの上で広がる（ZERO TOKYO のホームページと同じ動き）。
+// - 図を回す動きは turn.ts、画面全体に重ねる細かい粒は grain.ts。
 
 const root = document.documentElement;
 const svg = document.querySelector<SVGSVGElement>(".map-svg");
@@ -19,6 +21,9 @@ const links = [...document.querySelectorAll<SVGPathElement>(".link")];
 const pills = [...document.querySelectorAll<SVGTextElement>(".edge-label")];
 const ports = [...document.querySelectorAll<SVGLineElement>(".port")];
 const catLabels = [...document.querySelectorAll<SVGTextElement>(".cat-label")];
+const ruler = document.querySelector<HTMLElement>(".ruler");
+const rulerSpan = ruler?.querySelector<HTMLElement>(".ruler-span");
+const rulerDate = ruler?.querySelector<HTMLElement>(".ruler-date");
 const rulerMarks = [...document.querySelectorAll<HTMLElement>(".ruler-mark")];
 const memberLinks = [
 	...document.querySelectorAll<HTMLAnchorElement>(".member"),
@@ -195,12 +200,7 @@ function render() {
 	for (const l of ports) {
 		l.classList.toggle("is-on", fo?.nodes.has(l.dataset.node ?? "") ?? false);
 	}
-	for (const m of rulerMarks) {
-		m.classList.toggle(
-			"is-on",
-			words(m.dataset.repos).some((id) => fo?.nodes.has(id)),
-		);
-	}
+	renderRuler(fo);
 	hub?.classList.toggle("is-on", (fo?.nodes.has(hubId) || fo?.hub) ?? false);
 	for (const c of catLabels) {
 		const cat = c.dataset.cat ?? "";
@@ -221,6 +221,53 @@ function render() {
 		row.classList.toggle("is-on", row.dataset.flowLink === fo?.flow);
 	}
 	runDot(fo?.flow ?? null);
+}
+
+// ---------- 欄と図の間の目盛り ----------
+
+/** 目盛りの線を引いている、選んだリポジトリ */
+let spanRepo: string | null = null;
+
+/**
+ * リポジトリを 1 つ選んでいる間は、目盛りを、そのリポジトリを作った日から今日までの太い線と、作った日の日付にする。
+ * 図や欄の何かにのせている間は、のせたものの目盛りを、いつもどおり強調する。
+ */
+function renderRuler(fo: Focus | null) {
+	const repo =
+		selected && nodeById.get(selected)?.dataset.type === "repo"
+			? selected
+			: null;
+	const mark = repo
+		? rulerMarks.find((m) => words(m.dataset.repos).includes(repo))
+		: undefined;
+	const hovering =
+		hovered !== null ||
+		hoveredFlow !== null ||
+		hoveredCat !== null ||
+		hoveredMember !== null ||
+		hoveredRuler !== null ||
+		hoveredHub;
+	ruler?.classList.toggle("is-single", mark !== undefined);
+	if (ruler && mark && repo !== spanRepo) {
+		ruler.style.setProperty("--from", mark.style.getPropertyValue("--at"));
+		if (rulerDate) rulerDate.textContent = mark.dataset.date ?? "";
+		// 選び直すたびに、作った日から今日へ線を引き直す
+		for (const el of [rulerSpan, rulerDate]) {
+			if (!el) continue;
+			el.style.animation = "none";
+			void el.offsetWidth;
+			el.style.animation = "";
+		}
+	}
+	spanRepo = mark ? repo : null;
+	for (const m of rulerMarks) {
+		m.classList.toggle("is-sel", m === mark);
+		m.classList.toggle(
+			"is-on",
+			(!mark || hovering) &&
+				words(m.dataset.repos).some((id) => fo?.nodes.has(id)),
+		);
+	}
 }
 
 // ---------- 流れに沿って動く点と、線の説明 ----------
@@ -584,36 +631,66 @@ if (svg) {
 	setupTurn(svg, {
 		compact: narrow,
 		wide: window.matchMedia("(min-width: 1180px)"),
-		reduceMotion,
 	});
 }
 reduceMotion.addEventListener("change", () => {
 	dotFlow = null;
 	render();
 });
+setupGrain();
 
-// マウスについて動く丸。押せるものの上では広がり、リポジトリの点の上では点に吸い付く
+// マウスについて動く丸。押せるものの上では広がり、リポジトリの点の上では点に吸い付き、図を回している間は少し大きくなる。
+// マウスの矢印は隠し、この丸を矢印の代わりにする。丸は、マウスに少し遅れて、なめらかについてくる
 const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
 if (finePointer.matches) {
 	const cursor = document.createElement("div");
 	cursor.className = "cursor";
 	cursor.setAttribute("aria-hidden", "true");
 	document.body.append(cursor);
-	let x = -100;
-	let y = -100;
-	let tx = -100;
-	let ty = -100;
+	// 丸を出せたときだけ、矢印を隠す（style.css の has-cursor）
+	root.classList.add("has-cursor");
+	/** 丸がマウスに追いつくまでの、おおよその時間（秒）。大きいほど、ゆったり遅れてついてくる */
+	const SMOOTH = 0.06;
+	let x = 0;
+	let y = 0;
+	let vx = 0;
+	let vy = 0;
+	let tx = 0;
+	let ty = 0;
 	let frame = 0;
-	const step = () => {
-		// 動きを減らす設定のときは、遅らせずにマウスの位置へ置く
-		const k = reduceMotion.matches ? 1 : 0.2;
-		x += (tx - x) * k;
-		y += (ty - y) * k;
+	let last = 0;
+	/**
+	 * 丸を、目標へ、ばね（臨界減衰）で近づける。速さを引き継ぐので、動き出しと止まり際がなめらかになる。
+	 * マウスの動きに合わせて動くものなので、動きを減らす設定でも、なめらかに動かす
+	 */
+	const follow = (
+		pos: number,
+		goal: number,
+		vel: number,
+		dt: number,
+	): [number, number] => {
+		const w = 2 / SMOOTH;
+		const k = w * dt;
+		const e = 1 / (1 + k + 0.48 * k * k + 0.235 * k * k * k);
+		const d = pos - goal;
+		const s = (vel + w * d) * dt;
+		return [goal + (d + s) * e, (vel - w * s) * e];
+	};
+	const draw = () => {
 		cursor.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0)`;
-		frame =
-			Math.abs(tx - x) > 0.1 || Math.abs(ty - y) > 0.1
-				? requestAnimationFrame(step)
-				: 0;
+	};
+	const step = (now: number) => {
+		const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
+		last = now;
+		[x, vx] = follow(x, tx, vx, dt);
+		[y, vy] = follow(y, ty, vy, dt);
+		draw();
+		const settled =
+			Math.abs(tx - x) < 0.05 &&
+			Math.abs(ty - y) < 0.05 &&
+			Math.abs(vx) < 1 &&
+			Math.abs(vy) < 1;
+		frame = settled ? 0 : requestAnimationFrame(step);
 	};
 	document.addEventListener("pointermove", (e) => {
 		if (e.pointerType !== "mouse") return;
@@ -638,8 +715,24 @@ if (finePointer.matches) {
 		cursor.classList.toggle("is-active", active && !snapTo);
 		cursor.classList.toggle("is-snap", !!dot && !ring);
 		cursor.classList.toggle("is-hub", !!ring);
-		cursor.classList.add("is-visible");
-		if (!frame) frame = requestAnimationFrame(step);
+		cursor.classList.toggle("is-grab", !!t?.closest(".map-svg.is-turning"));
+		// 画面の外から戻ってきたときは、前の場所から飛んでこないよう、その位置から始める
+		if (!cursor.classList.contains("is-visible")) {
+			x = tx;
+			y = ty;
+			vx = 0;
+			vy = 0;
+			draw();
+			cursor.classList.add("is-visible");
+		}
+		if (!frame) {
+			last = performance.now();
+			frame = requestAnimationFrame(step);
+		}
+	});
+	// 図を回し終えたら、すぐに元の大きさに戻す
+	document.addEventListener("pointerup", () => {
+		cursor.classList.remove("is-grab");
 	});
 	document.documentElement.addEventListener("pointerleave", () => {
 		cursor.classList.remove("is-visible");
@@ -647,7 +740,7 @@ if (finePointer.matches) {
 }
 
 // 表示の色: 初めは Dark。ボタンで Light と切り替え、選んだ色を覚える（index.html が最初の表示の前に読み直す）。
-// ボタンに出す名前とアイコンは CSS が決めるので、ここでは色と、読み上げの名前と、ブラウザの帯の色を変える
+// ボタンに出すアイコン（月と太陽）は CSS が決めるので、ここでは色と、読み上げの名前と、ブラウザの帯の色を変える
 const themeButton = document.querySelector<HTMLButtonElement>(
 	"[data-theme-toggle]",
 );
