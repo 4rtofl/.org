@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 460">
+<title>4rtofl</title>
+<style>
+.bg { fill: #f2f1ec; }
+.ink { color: #121317; }
+@media (prefers-color-scheme: dark) {
+	.bg { fill: #121317; }
+	.ink { color: #f2f1ec; }
+}
+</style>
+<rect class="bg" width="460" height="460" rx="96"/>
+<g class="ink">
+<g fill="none" stroke="currentColor" stroke-width="26" stroke-linecap="round">
+<path d="M162 71V190A26 26 0 0 0 188 216H378"/>
+<path d="M122 111V190A66 66 0 0 0 188 256H378"/>
+<path d="M82 151V190A106 106 0 0 0 188 296H378"/>
+</g>
+<g fill="currentColor">
+<path d="M240 190V151A13 13 0 0 1 266 151V190Z"/>
+<path d="M280 190V111A13 13 0 0 1 306 111V190Z"/>
+<path d="M320 190V71A13 13 0 0 1 346 71V190Z"/>
+<path d="M240 322V389A13 13 0 0 0 266 389V322Z"/>
+<path d="M280 322V389A13 13 0 0 0 306 389V322Z"/>
+<path d="M320 322V389A13 13 0 0 0 346 389V322Z"/>
+</g>
+</g>
+</svg>

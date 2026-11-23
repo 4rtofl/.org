@@ -1,0 +1,1759 @@
+/* 4rtofl.org
+   色はロゴの 2 色（紙 #f2f1ec と墨 #121317）と、その間の灰色だけを使う。 */
+
+:root {
+	--paper: #f2f1ec;
+	--paper-2: #e8e7e1;
+	--ink: #121317;
+	--ink-2: #55565b;
+	--ink-3: #8f8f8a;
+	--rule: rgb(18 19 23 / 0.13);
+	--rule-strong: rgb(18 19 23 / 0.3);
+	--shadow: rgb(18 19 23 / 0.16);
+
+	--font-sans:
+		"Geist Variable", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+		"Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+	--font-mono:
+		"Geist Mono Variable", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+	--top-h: 56px;
+	--sheet-w: 384px;
+	--gutter: 32px;
+	--ease: cubic-bezier(0.2, 0.7, 0.1, 1);
+
+	color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		--paper: #0e0f11;
+		--paper-2: #17181b;
+		--ink: #ecebe6;
+		--ink-2: #a2a29d;
+		--ink-3: #6c6c69;
+		--rule: rgb(236 235 230 / 0.12);
+		--rule-strong: rgb(236 235 230 / 0.28);
+		--shadow: rgb(0 0 0 / 0.5);
+		color-scheme: dark;
+	}
+}
+
+:root[data-theme="dark"] {
+	--paper: #0e0f11;
+	--paper-2: #17181b;
+	--ink: #ecebe6;
+	--ink-2: #a2a29d;
+	--ink-3: #6c6c69;
+	--rule: rgb(236 235 230 / 0.12);
+	--rule-strong: rgb(236 235 230 / 0.28);
+	--shadow: rgb(0 0 0 / 0.5);
+	color-scheme: dark;
+}
+
+/* ---------- 土台 ---------- */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+[hidden] {
+	display: none !important;
+}
+
+html {
+	background: var(--paper);
+	color: var(--ink);
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+	scroll-padding-top: var(--top-h);
+}
+
+body {
+	margin: 0;
+	background: var(--paper);
+	font-family: var(--font-sans);
+	font-size: 15px;
+	line-height: 1.7;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	transition: background-color 0.4s var(--ease);
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+
+::selection {
+	background: var(--ink);
+	color: var(--paper);
+}
+
+:focus-visible {
+	outline: 1.5px solid var(--ink);
+	outline-offset: 3px;
+	border-radius: 2px;
+}
+
+.top-nav,
+.colophon,
+.ruler-month {
+	font-family: var(--font-mono);
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+}
+
+/* ---------- 上の帯 ---------- */
+
+.top {
+	position: sticky;
+	top: 0;
+	z-index: 20;
+	height: var(--top-h);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 var(--gutter);
+	background: color-mix(in srgb, var(--paper) 84%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+}
+
+.brand {
+	display: inline-flex;
+	align-items: center;
+	gap: 11px;
+	font-weight: 640;
+	font-size: 17px;
+	letter-spacing: -0.03em;
+}
+
+.brand-mark {
+	width: 19px;
+	height: auto;
+	display: block;
+}
+
+.top-nav {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	font-size: 11px;
+}
+
+.top-nav a,
+.theme {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	height: 32px;
+	padding: 0 12px;
+	border-radius: 999px;
+	color: var(--ink-2);
+	transition:
+		color 0.2s,
+		background-color 0.2s;
+}
+
+.top-nav a:hover,
+.theme:hover {
+	color: var(--ink);
+	background: var(--paper-2);
+}
+
+.theme {
+	font: inherit;
+	letter-spacing: inherit;
+	text-transform: inherit;
+	background: none;
+	border: 1px solid var(--rule);
+	margin-left: 8px;
+	cursor: pointer;
+}
+
+.theme-icon {
+	width: 11px;
+	height: 11px;
+	border-radius: 50%;
+	border: 1px solid currentColor;
+	background: linear-gradient(90deg, currentColor 50%, transparent 50%);
+}
+
+.theme[data-mode="light"] .theme-icon {
+	background: transparent;
+}
+
+.theme[data-mode="dark"] .theme-icon {
+	background: currentColor;
+}
+
+/* ---------- 説明欄と図 ---------- */
+
+.hero {
+	display: grid;
+	grid-template-columns: var(--sheet-w) minmax(0, 1fr);
+	min-height: calc(100svh - var(--top-h));
+}
+
+.sheet {
+	position: relative;
+	padding: 36px var(--gutter) 28px;
+}
+
+.map {
+	position: relative;
+	margin: 0;
+	min-width: 0;
+	display: grid;
+	place-items: center;
+	padding: 16px 24px;
+	overflow: hidden;
+}
+
+/* 方眼の地模様（ごく薄く） */
+.map::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background-image:
+		linear-gradient(var(--rule) 1px, transparent 1px),
+		linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+	background-size: 48px 48px;
+	background-position: center;
+	opacity: 0.35;
+	-webkit-mask-image: radial-gradient(closest-side, #000 30%, transparent 100%);
+	mask-image: radial-gradient(closest-side, #000 30%, transparent 100%);
+	pointer-events: none;
+}
+
+.map-svg {
+	position: relative;
+	display: block;
+	width: 100%;
+	height: auto;
+	overflow: visible;
+	-webkit-tap-highlight-color: transparent;
+}
+
+/* ---------- 説明欄: 全体（名前・流れ・メンバー） ---------- */
+
+.wordmark {
+	margin: 0;
+	font-size: clamp(64px, 6.4vw, 96px);
+	line-height: 0.8;
+	font-weight: 680;
+	letter-spacing: -0.07em;
+	margin-left: -0.06em;
+}
+
+.ov-flows {
+	margin: 56px 0 40px;
+}
+
+.flow-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.flow-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 5px 0;
+	transition:
+		color 0.3s var(--ease),
+		padding 0.4s var(--ease);
+}
+
+.flow-name {
+	font-size: 15px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	white-space: nowrap;
+}
+
+.ov-flows .flow-name {
+	font-size: 30px;
+	line-height: 1.1;
+	letter-spacing: -0.035em;
+}
+
+/* のせた行と選んだ行のほかを薄くする */
+.flow-list:has(.flow-row:hover) .flow-row:not(:hover),
+.flow-list:has(.flow-row.is-on) .flow-row:not(.is-on, :hover) {
+	color: var(--ink-3);
+}
+
+.flow-row:hover,
+.flow-row.is-on {
+	padding-left: 10px;
+}
+
+/* 流れの手順を、図と同じ形（リポジトリは丸、外のものは四角、中心は輪）で並べた印 */
+.flow-sig {
+	flex: none;
+	overflow: visible;
+	color: var(--ink-3);
+	transition: color 0.3s var(--ease);
+}
+
+.flow-sig line {
+	stroke: currentColor;
+	stroke-width: 1;
+}
+
+.flow-sig circle,
+.flow-sig rect {
+	fill: currentColor;
+}
+
+.flow-sig .sig-hub {
+	fill: var(--paper);
+	stroke: currentColor;
+	stroke-width: 1.2;
+}
+
+.flow-row:hover .flow-sig,
+.flow-row.is-on .flow-sig {
+	color: var(--ink);
+}
+
+.member-list {
+	list-style: none;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px 22px;
+	margin: 0 0 18px;
+	padding: 0;
+}
+
+.member {
+	display: inline-flex;
+	align-items: center;
+	gap: 9px;
+}
+
+.avatar {
+	display: block;
+	border-radius: 50%;
+	background: var(--paper-2);
+	filter: grayscale(1) contrast(1.06);
+}
+
+.member .avatar {
+	width: 26px;
+	height: 26px;
+}
+
+.member-id {
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+.member:hover .member-id,
+.member:focus-visible .member-id {
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 3px;
+}
+
+.spec-member {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	margin-right: 16px;
+}
+
+.spec-member .avatar {
+	width: 20px;
+	height: 20px;
+}
+
+.spec-member:hover span {
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
+/* スマートフォンの小さい図で使う、番号と名前の対応（広い画面では出さない） */
+.ov-key {
+	display: none;
+	list-style: none;
+	margin: 0 0 32px;
+	padding: 0;
+	columns: 2;
+	column-gap: 24px;
+}
+
+.ov-key a {
+	display: block;
+	padding: 3px 0;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.key-num {
+	display: inline-block;
+	width: 26px;
+	font-family: var(--font-mono);
+	font-size: 10px;
+	color: var(--ink-3);
+}
+
+.colophon {
+	display: flex;
+	gap: 14px;
+	margin: 0;
+	font-size: 9.5px;
+	color: var(--ink-3);
+}
+
+.colophon a:hover {
+	color: var(--ink);
+}
+
+/* ---------- 説明欄: 1 つのリポジトリ・外のもの・流れ ---------- */
+
+.sheet-project {
+	animation: sheet-in 0.55s var(--ease) both;
+}
+
+.sheet-bar {
+	margin-bottom: 44px;
+	font-size: 13px;
+	color: var(--ink-2);
+}
+
+.sheet-back {
+	display: inline-flex;
+	gap: 8px;
+	transition: color 0.2s;
+}
+
+.sheet-back:hover {
+	color: var(--ink);
+}
+
+.sheet-back span {
+	transition: transform 0.3s var(--ease);
+}
+
+.sheet-back:hover span {
+	transform: translateX(-3px);
+}
+
+.sheet-name {
+	margin: 0;
+	font-size: clamp(48px, 4.2vw, 68px);
+	line-height: 0.92;
+	font-weight: 670;
+	letter-spacing: -0.055em;
+	margin-left: -0.04em;
+	overflow-wrap: anywhere;
+	outline: none;
+}
+
+.sheet-flow .sheet-name {
+	margin-bottom: 36px;
+}
+
+.sheet-desc {
+	margin: 20px 0 32px;
+	font-size: 19px;
+	line-height: 1.45;
+	letter-spacing: -0.012em;
+	text-wrap: pretty;
+}
+
+.sheet-specs {
+	margin: 0 0 32px;
+}
+
+.sheet-specs div {
+	display: grid;
+	grid-template-columns: 64px 1fr;
+	align-items: baseline;
+	gap: 12px;
+	padding: 3px 0;
+}
+
+.sheet-specs dt {
+	font-size: 12px;
+	color: var(--ink-3);
+}
+
+.sheet-specs dd {
+	margin: 0;
+	font-size: 13.5px;
+}
+
+.status-dot {
+	display: inline-block;
+	width: 7px;
+	height: 7px;
+	margin-right: 9px;
+	border-radius: 50%;
+	background: var(--ink);
+	border: 1px solid var(--ink);
+	transform: translateY(-1px);
+}
+
+.status-dot:not([data-status="active"]) {
+	background: transparent;
+}
+
+.sheet-links {
+	list-style: none;
+	margin: 0 0 28px;
+	padding: 0;
+}
+
+.sheet-links a {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: baseline;
+	gap: 14px;
+	padding: 9px 6px 9px 0;
+	transition:
+		background-color 0.25s var(--ease),
+		color 0.25s var(--ease),
+		padding 0.35s var(--ease);
+}
+
+.link-label {
+	font-size: 16px;
+	font-weight: 600;
+	letter-spacing: -0.015em;
+}
+
+.link-note {
+	overflow: hidden;
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	text-align: right;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--ink-3);
+	transition: color 0.25s;
+}
+
+.link-arrow {
+	font-size: 15px;
+	transition: transform 0.35s var(--ease);
+}
+
+.sheet-links a:hover,
+.sheet-links a:focus-visible {
+	padding-left: 12px;
+	padding-right: 12px;
+	background: var(--ink);
+	color: var(--paper);
+	outline: none;
+}
+
+.sheet-links a:hover .link-note,
+.sheet-links a:focus-visible .link-note {
+	color: color-mix(in srgb, var(--paper) 70%, transparent);
+}
+
+.sheet-links a:hover .link-arrow {
+	transform: translate(2px, -2px);
+}
+
+@keyframes sheet-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* ---------- 欄と図の間の目盛り（上が組織の始まり、下が今日。リポジトリを作った日に長い目盛り） ---------- */
+
+.ruler {
+	display: none;
+}
+
+.ruler-ticks {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+}
+
+.ruler-ticks line,
+.ruler-ticks path {
+	fill: none;
+	stroke: var(--rule-strong);
+	stroke-width: 1;
+	vector-effect: non-scaling-stroke;
+}
+
+.ruler-ticks .ruler-line {
+	stroke: var(--rule);
+}
+
+.ruler-month {
+	position: absolute;
+	font-size: 9px;
+	line-height: 1;
+	color: var(--ink-3);
+	white-space: nowrap;
+}
+
+.ruler-mark {
+	position: absolute;
+	pointer-events: auto;
+}
+
+.ruler-mark::before {
+	content: "";
+	position: absolute;
+	background: var(--ink-2);
+	transition:
+		width 0.35s var(--ease),
+		height 0.35s var(--ease),
+		background-color 0.25s;
+}
+
+.ruler-mark.is-on::before,
+.ruler-mark:hover::before {
+	background: var(--ink);
+}
+
+/* 縦の目盛り（広い画面）: 上が始まり、印は右へ伸びる */
+.ruler-h {
+	display: none;
+}
+
+.ruler .ruler-month {
+	top: calc(var(--at) * 1%);
+	right: 22px;
+	transform: translateY(-50%);
+}
+
+.ruler .ruler-mark {
+	top: calc(var(--at) * 1%);
+	left: 12px;
+	width: 24px;
+	height: 10px;
+	transform: translateY(-50%);
+}
+
+.ruler .ruler-mark::before {
+	left: 0;
+	top: 4.25px;
+	width: 9px;
+	height: 1.5px;
+}
+
+.ruler .ruler-mark:hover::before,
+.ruler .ruler-mark.is-on::before {
+	width: 20px;
+}
+
+/* ---------- マウスについて動く丸（ZERO TOKYO のホームページと同じ動き） ---------- */
+
+.cursor {
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 100;
+	width: 0;
+	height: 0;
+	pointer-events: none;
+	mix-blend-mode: difference;
+	opacity: 0;
+	transition: opacity 0.3s;
+}
+
+.cursor::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: #efefef;
+	transform: translate(-50%, -50%);
+	transition:
+		width 0.5s cubic-bezier(0.5, 0.1, 0, 1),
+		height 0.5s cubic-bezier(0.5, 0.1, 0, 1);
+}
+
+.cursor.is-visible {
+	opacity: 1;
+}
+
+.cursor.is-active::before {
+	width: 52px;
+	height: 52px;
+}
+
+.cursor.is-snap::before {
+	width: 30px;
+	height: 30px;
+}
+
+/* 中心にのせたときは、中心の輪を覆う大きさにする */
+.cursor.is-hub::before {
+	width: var(--hub, 120px);
+	height: var(--hub, 120px);
+}
+
+/* 流れの手順: 上から下へ進む線と、番号の印。リポジトリは丸、外のものは四角 */
+.route {
+	list-style: none;
+	margin: 6px 0 0;
+	padding: 0;
+}
+
+.stop-item {
+	position: relative;
+	padding: 0 0 20px 32px;
+}
+
+.stop-item.is-last {
+	padding-bottom: 0;
+}
+
+.stop-item::before {
+	content: "";
+	position: absolute;
+	left: 8.75px;
+	top: 18px;
+	bottom: -1px;
+	border-left: 1.5px solid var(--ink);
+}
+
+.stop-item.is-last::before {
+	display: none;
+}
+
+/* 最後の段から横へ分かれるときは、分かれる所まで線を伸ばし、その下は隠す */
+.stop-item.is-last:has(> .branch)::before {
+	display: block;
+	bottom: 0;
+}
+
+.branch-mask {
+	display: none;
+}
+
+.stop-item.is-last > .branch .branch-mask {
+	display: block;
+	position: absolute;
+	left: -56px;
+	top: -4px;
+	bottom: -2px;
+	width: 10px;
+	background: var(--paper);
+}
+
+/* 進む向きの印（下向き） */
+.stop-item:not(.is-last)::after {
+	content: "";
+	position: absolute;
+	left: 6.7px;
+	bottom: 4px;
+	width: 5px;
+	height: 5px;
+	border-right: 1.5px solid var(--ink);
+	border-bottom: 1.5px solid var(--ink);
+	transform: rotate(45deg);
+}
+
+.stop,
+.branch {
+	position: relative;
+}
+
+.stop-mark {
+	position: absolute;
+	left: -32px;
+	top: 1px;
+	display: grid;
+	place-items: center;
+	width: 19px;
+	height: 19px;
+	font-family: var(--font-mono);
+	font-size: 10px;
+	font-style: normal;
+	font-weight: 600;
+	line-height: 1;
+	color: var(--paper);
+	background: var(--ink);
+	border-radius: 50%;
+	box-shadow: 0 0 0 3px var(--paper);
+	transition: transform 0.3s var(--ease);
+}
+
+.stop[data-kind="ext"] > .stop-mark {
+	border-radius: 3px;
+}
+
+/* 横から合流する（in）・横へ分かれる（out）流れ */
+.branch {
+	margin: 12px 0 0 28px;
+}
+
+.branch > .stop-mark {
+	left: -26px;
+	top: 6px;
+	width: 11px;
+	height: 11px;
+	background: var(--paper);
+	border: 1.5px solid var(--ink);
+	box-shadow: 0 0 0 2px var(--paper);
+}
+
+.branch[data-kind="ext"] > .stop-mark {
+	border-radius: 2px;
+}
+
+.branch::after {
+	content: "";
+	position: absolute;
+	left: -51.25px;
+	top: -6px;
+	width: 31.5px;
+	height: 12px;
+	border-top: 1.5px solid var(--ink);
+	border-right: 1.5px solid var(--ink);
+	border-top-right-radius: 8px;
+}
+
+.branch-arrow {
+	position: absolute;
+	width: 5px;
+	height: 5px;
+	border-right: 1.5px solid var(--ink);
+	border-bottom: 1.5px solid var(--ink);
+}
+
+.branch[data-dir="in"] .branch-arrow {
+	left: -45px;
+	top: -8.4px;
+	transform: rotate(135deg);
+}
+
+.branch[data-dir="out"] .branch-arrow {
+	left: -23.25px;
+	top: 0;
+	transform: rotate(45deg);
+}
+
+.stop-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 2px 10px;
+	margin: 0 0 2px;
+}
+
+.stop-name {
+	font-size: 14.5px;
+	font-weight: 640;
+	letter-spacing: -0.01em;
+}
+
+.branch .stop-name {
+	font-size: 13.5px;
+}
+
+a.stop-name {
+	border-bottom: 1px solid var(--rule-strong);
+	transition: border-color 0.2s;
+}
+
+a.stop-name:hover {
+	border-color: var(--ink);
+}
+
+.stop-text {
+	margin: 0;
+	font-size: 12.5px;
+	line-height: 1.75;
+	color: var(--ink-2);
+	text-wrap: pretty;
+}
+
+.stop-head:hover ~ .stop-text,
+.stop-head:focus-within ~ .stop-text {
+	color: var(--ink);
+}
+
+/* ---------- 図 ---------- */
+
+.map-svg text {
+	font-family: var(--font-sans);
+	fill: var(--ink);
+}
+
+.orbit {
+	fill: none;
+	stroke: var(--rule-strong);
+	stroke-width: 1;
+}
+
+.tick {
+	stroke: var(--ink-3);
+	stroke-width: 0.7;
+	opacity: 0.55;
+}
+
+.tick-major {
+	stroke: var(--ink);
+	stroke-width: 1;
+	opacity: 0.9;
+}
+
+.track {
+	fill: none;
+	stroke: var(--ink);
+	stroke-width: 1.15;
+	stroke-linecap: round;
+	opacity: 0.78;
+	transition:
+		opacity 0.35s var(--ease),
+		stroke-width 0.35s var(--ease);
+}
+
+.leader {
+	stroke: var(--ink-3);
+	stroke-width: 1;
+	stroke-dasharray: 1 3.2;
+	stroke-linecap: round;
+	transition:
+		stroke 0.35s var(--ease),
+		opacity 0.35s var(--ease);
+}
+
+.has-focus .leader:not(.is-on) {
+	opacity: 0.25;
+}
+
+.leader.is-on {
+	stroke: var(--ink);
+}
+
+/* 流れのつながり: 点の輪の外の帯を、中心と同じ円弧で進む。カテゴリの線より細く、薄くする */
+/* つながりの線: ふだんは隠し、点や流れを選んだときに、時計と同じ円弧で出す */
+.link {
+	fill: none;
+	stroke: var(--ink);
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	opacity: 0;
+	transition: opacity 0.35s var(--ease);
+}
+
+.has-focus .link.is-on {
+	opacity: 1;
+}
+
+/* 線に添える短い説明: 動く点がいる段のものだけを出す。枠は付けず、紙の色の縁取りで線から浮かせる */
+.map-svg .edge-label {
+	opacity: 0;
+	pointer-events: none;
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: -0.005em;
+	fill: var(--ink);
+	paint-order: stroke;
+	stroke: var(--paper);
+	stroke-width: 5px;
+	stroke-linejoin: round;
+	transform: translateY(3px);
+	transform-box: fill-box;
+	transition:
+		opacity 0.3s var(--ease),
+		transform 0.45s var(--ease);
+}
+
+.has-focus .edge-label.is-on {
+	opacity: 1;
+	transform: none;
+}
+
+/* 外のものから時計の輪へ入る線 */
+.port {
+	stroke: var(--ink-3);
+	stroke-width: 1;
+	stroke-dasharray: 1 3.2;
+	stroke-linecap: round;
+	transition:
+		stroke 0.35s var(--ease),
+		opacity 0.35s var(--ease);
+}
+
+.has-focus .port:not(.is-on) {
+	opacity: 0.25;
+}
+
+/* 選んだときは、帯の線とつながる実線にする */
+.has-focus .port.is-on {
+	stroke: var(--ink);
+	stroke-width: 1.8;
+	stroke-dasharray: none;
+}
+
+/* 広い図と小さい図で、外のものの箱・線・番号の場所が違う */
+.sat-compact,
+.port-compact,
+.badge-compact {
+	display: none;
+}
+
+/* Bobert Agent が中心（GitHub）に Pull request を出す流れ: どのリポジトリにも出せることを、中心から全部の線へ流れる光で示す */
+.track-pulse {
+	fill: none;
+	stroke: var(--ink);
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-dasharray: 0.1 1.2;
+	stroke-dashoffset: 0.1;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.is-any-repo .track-pulse {
+	opacity: 1;
+	animation: track-pulse 2.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* 中心（GitHub）にのせたとき: 光を、時計回りに少しずつ遅らせて、全部の線へ流す */
+.is-hub .track-pulse {
+	opacity: 1;
+	animation: track-pulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+	animation-delay: calc(var(--i) * 0.1s);
+}
+
+@keyframes track-pulse {
+	from {
+		stroke-dashoffset: 0.1;
+	}
+	to {
+		stroke-dashoffset: -1;
+	}
+}
+
+.has-focus.is-any-repo .track:not(.is-route) {
+	opacity: 0.4;
+}
+
+.is-any-repo .node[data-type="repo"]:not(.is-on) {
+	opacity: 0.55;
+}
+
+.map-svg .sat-cname {
+	font-family: var(--font-mono);
+	font-size: 17px;
+	font-weight: 650;
+	letter-spacing: 0.08em;
+}
+
+.map-svg .node-ext.is-selected .sat-cname {
+	fill: var(--paper);
+}
+
+.map-hub {
+	cursor: pointer;
+	outline: none;
+}
+
+.hub-hit {
+	fill: transparent;
+}
+
+.hub-ring {
+	fill: var(--paper);
+	stroke: var(--ink);
+	stroke-width: 1.15;
+	transition: stroke-width 0.35s var(--ease);
+}
+
+.map-hub:hover .hub-ring,
+.map-hub:focus-visible .hub-ring {
+	stroke-width: 2;
+}
+
+.hub-mark {
+	color: var(--ink);
+}
+
+.hub-caption-path {
+	fill: none;
+	stroke: none;
+}
+
+.map-svg .hub-caption {
+	font-family: var(--font-mono);
+	font-size: 7.5px;
+	letter-spacing: 0.24em;
+	fill: var(--ink-2);
+}
+
+.map-svg .cat-label {
+	font-family: var(--font-mono);
+	font-size: 9px;
+	letter-spacing: 0.18em;
+	fill: var(--ink-2);
+	cursor: default;
+	transition:
+		opacity 0.35s var(--ease),
+		fill 0.35s var(--ease);
+}
+
+.map-svg .cat-code {
+	font-weight: 700;
+	fill: var(--ink);
+}
+
+.map-svg .cat-label.is-on {
+	fill: var(--ink);
+}
+
+.node {
+	cursor: pointer;
+	outline: none;
+	transition: opacity 0.35s var(--ease);
+}
+
+.node-hit {
+	fill: transparent;
+}
+
+.node-ring {
+	fill: none;
+	stroke: var(--ink);
+	stroke-width: 1.15;
+	opacity: 0;
+	transform: scale(0.3);
+	transform-box: fill-box;
+	transform-origin: center;
+	transition:
+		opacity 0.3s var(--ease),
+		transform 0.45s var(--ease);
+}
+
+.node-dot {
+	fill: var(--ink);
+	stroke: var(--paper);
+	stroke-width: 3.5;
+	paint-order: stroke;
+}
+
+.node:not([data-status="active"]) .node-dot {
+	fill: var(--paper);
+	stroke: var(--ink);
+	stroke-width: 1.2;
+}
+
+.sat-box {
+	fill: var(--paper);
+	stroke: var(--ink);
+	stroke-width: 1.2;
+	transition:
+		fill 0.25s var(--ease),
+		stroke-width 0.25s var(--ease);
+}
+
+.map-svg .sat-name {
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	font-weight: 650;
+	letter-spacing: 0.12em;
+}
+
+.map-svg .sat-kind {
+	font-size: 10px;
+	fill: var(--ink-2);
+}
+
+.node-ext:hover .sat-box,
+.node-ext:focus-visible .sat-box,
+.node-ext.is-focus .sat-box {
+	stroke-width: 2;
+}
+
+.node-ext.is-selected .sat-box {
+	fill: var(--ink);
+}
+
+.map-svg .node-ext.is-selected text {
+	fill: var(--paper);
+}
+
+.map-svg .node-name {
+	font-weight: 620;
+	letter-spacing: -0.02em;
+}
+
+.map-svg .node-kind {
+	font-family: var(--font-mono);
+	letter-spacing: 0.12em;
+	fill: var(--ink-2);
+}
+
+.map-svg .node-index {
+	font-weight: 600;
+	fill: var(--ink);
+}
+
+.map-svg .node-num {
+	display: none;
+	font-family: var(--font-mono);
+	font-weight: 500;
+}
+
+.node:hover .node-ring,
+.node:focus-visible .node-ring,
+.node.is-focus .node-ring,
+.node.is-selected .node-ring {
+	opacity: 1;
+	transform: scale(1);
+}
+
+.node.is-selected .node-dot {
+	fill: var(--ink);
+	stroke: var(--paper);
+	stroke-width: 3.5;
+}
+
+.node:focus-visible .node-name {
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 3px;
+}
+
+/* 何かに注目しているときは、関係のないものを薄くする */
+.has-focus .track:not(.is-on):not(.is-route) {
+	opacity: 0.12;
+}
+
+.has-focus .track.is-on {
+	opacity: 1;
+	stroke-width: 1.6;
+}
+
+.has-focus .node:not(.is-on) {
+	opacity: 0.22;
+}
+
+.has-focus .cat-label:not(.is-on) {
+	opacity: 0.3;
+}
+
+/* 流れを選んでいるとき: その流れの線を太くし、番号を出す */
+.is-flow .track.is-route {
+	opacity: 1;
+	stroke-width: 2;
+}
+
+.route-path {
+	fill: none;
+	stroke: none;
+}
+
+.flow-badges {
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+	transition:
+		opacity 0.3s var(--ease),
+		visibility 0s 0.3s;
+}
+
+.flow-badges.is-on {
+	opacity: 1;
+	visibility: visible;
+	transition: opacity 0.3s var(--ease);
+}
+
+.badge {
+	transform-box: fill-box;
+	transform-origin: center;
+	transition: transform 0.3s var(--ease);
+}
+
+.badge circle,
+.badge rect {
+	fill: var(--ink);
+	stroke: var(--paper);
+	stroke-width: 3;
+	paint-order: stroke;
+}
+
+.map-svg .badge text {
+	font-family: var(--font-mono);
+	font-size: 10px;
+	font-weight: 600;
+	fill: var(--paper);
+}
+
+.badge.is-hot {
+	transform: scale(1.35);
+}
+
+.flow-dot {
+	fill: var(--paper);
+	stroke: var(--ink);
+	stroke-width: 2;
+	visibility: hidden;
+	transition: opacity 0.25s var(--ease);
+}
+
+.flow-dot.is-on {
+	visibility: visible;
+}
+
+.map-marker {
+	fill: var(--ink);
+	opacity: 0;
+	transition:
+		transform 0.8s var(--ease),
+		opacity 0.3s var(--ease);
+}
+
+.map-marker.is-on {
+	opacity: 1;
+}
+
+/* 最初に開いたときに、線を中心から描いていく */
+.is-intro .hub-ring {
+	animation: draw 0.9s var(--ease) 0.05s backwards;
+}
+
+.is-intro .hub-mark,
+.is-intro .hub-caption {
+	animation: fade-in 0.9s var(--ease) 0.15s backwards;
+}
+
+.is-intro .track {
+	animation: draw 1.15s var(--ease) calc(0.3s + var(--i) * 45ms) backwards;
+}
+
+.is-intro .orbit {
+	animation: draw 1.6s var(--ease) 0.2s backwards;
+}
+
+.is-intro .tick,
+.is-intro .leader {
+	animation: fade-in 0.8s ease 0.9s backwards;
+}
+
+.is-intro .port {
+	animation: fade-in 0.8s ease 1.2s backwards;
+}
+
+.is-intro .node-dot,
+.is-intro .sat-box {
+	animation: pop 0.5s var(--ease) calc(0.95s + var(--i) * 40ms) backwards;
+	transform-box: fill-box;
+	transform-origin: center;
+}
+
+.is-intro .node-name,
+.is-intro .node-kind,
+.is-intro .node-num {
+	animation: fade-in 0.7s var(--ease) calc(1.05s + var(--i) * 40ms) backwards;
+}
+
+.is-intro .cat-label {
+	animation: fade-in 0.7s var(--ease) 0.9s backwards;
+}
+
+.is-intro .ov-head > *,
+.is-intro .ov-body > * {
+	animation: rise 0.8s var(--ease) backwards;
+}
+
+.is-intro .ov-head > :nth-child(2) {
+	animation-delay: 0.06s;
+}
+.is-intro .ov-head > :nth-child(3) {
+	animation-delay: 0.12s;
+}
+.is-intro .ov-body > :nth-child(1) {
+	animation-delay: 0.18s;
+}
+.is-intro .ov-body > :nth-child(2) {
+	animation-delay: 0.24s;
+}
+.is-intro .ov-body > :nth-child(3) {
+	animation-delay: 0.3s;
+}
+.is-intro .ov-body > :nth-child(n + 4) {
+	animation-delay: 0.36s;
+}
+
+@keyframes draw {
+	from {
+		stroke-dasharray: 1;
+		stroke-dashoffset: 1;
+	}
+	to {
+		stroke-dasharray: 1;
+		stroke-dashoffset: 0;
+	}
+}
+
+@keyframes fade-in {
+	from {
+		opacity: 0;
+	}
+}
+
+@keyframes pop {
+	from {
+		opacity: 0;
+		transform: scale(0);
+	}
+}
+
+@keyframes rise {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+}
+
+/* ---------- 画面の幅ごとの並べ方 ---------- */
+
+/* 広い画面: 1 画面に収め、ページは動かさない。説明欄だけ、長いときに中で動く */
+@media (min-width: 1180px) {
+	body {
+		height: 100dvh;
+		overflow: hidden;
+	}
+
+	/* 上の帯は置かず、GitHub と色の切り替えだけを図の右上に浮かべる */
+	.top {
+		position: fixed;
+		top: 0;
+		left: var(--sheet-w);
+		right: 0;
+		justify-content: flex-end;
+		background: none;
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+		pointer-events: none;
+	}
+
+	.top-nav {
+		pointer-events: auto;
+	}
+
+	.brand {
+		display: none;
+	}
+
+	.hero {
+		position: relative;
+		height: 100dvh;
+		min-height: 0;
+	}
+
+	.sheet {
+		display: flex;
+		flex-direction: column;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		scrollbar-width: none;
+	}
+
+	.has-selection .sheet-overview {
+		display: none;
+	}
+
+	/* 全体の欄は高さいっぱいに広げ、メンバーと著作の行を下に置く */
+	.sheet-overview {
+		display: flex;
+		flex: 1 0 auto;
+		flex-direction: column;
+	}
+
+	.ov-body {
+		display: flex;
+		flex: 1 0 auto;
+		flex-direction: column;
+	}
+
+	.member-list {
+		margin-top: auto;
+	}
+
+	/* 欄と図の間の目盛り。欄の右の端に、縦に置く */
+	.ruler {
+		display: block;
+		position: absolute;
+		top: 36px;
+		bottom: 28px;
+		left: calc(var(--sheet-w) - 12px);
+		width: 24px;
+		z-index: 2;
+		pointer-events: none;
+	}
+
+	/* 図の入れ物の大きさを決めて、図をその中に収める */
+	.map {
+		height: 100%;
+		grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+		padding-top: 28px;
+	}
+
+	.map-svg {
+		height: 100%;
+	}
+}
+
+/* 高さの低い画面では、説明欄を少し詰めて、できるだけ動かさずに読めるようにする */
+@media (min-width: 1180px) and (max-height: 800px) {
+	.sheet {
+		padding-top: 24px;
+		padding-bottom: 20px;
+	}
+
+	.ruler {
+		top: 24px;
+		bottom: 20px;
+	}
+
+	.wordmark {
+		font-size: 72px;
+	}
+
+	.ov-flows {
+		margin: 36px 0 28px;
+	}
+
+	.ov-flows .flow-name {
+		font-size: 26px;
+	}
+}
+
+/* それより狭い画面: 図を全幅で見せ、選んだものの説明は下から出す */
+@media (max-width: 1179px) {
+	.ov-flows {
+		margin-top: 0;
+	}
+
+	.hero {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+	}
+
+	.sheet,
+	.sheet-overview {
+		display: contents;
+	}
+
+	.ov-head {
+		order: 1;
+		padding: 32px var(--gutter) 4px;
+	}
+
+	.map {
+		order: 2;
+		padding: 8px var(--gutter) 20px;
+	}
+
+	.ov-body {
+		order: 4;
+		padding: 8px var(--gutter) calc(32px + env(safe-area-inset-bottom));
+	}
+
+	/* 横の目盛り: 左が始まり、印は下へ伸びる */
+	.ruler {
+		display: block;
+		order: 3;
+		position: relative;
+		height: 24px;
+		margin: 12px var(--gutter) 36px;
+	}
+
+	.ruler-v {
+		display: none;
+	}
+
+	.ruler-h {
+		display: block;
+	}
+
+	.ruler .ruler-month {
+		top: -8px;
+		right: auto;
+		left: calc(var(--at) * 1%);
+		transform: translateX(5px);
+	}
+
+	.ruler .ruler-mark {
+		top: 12px;
+		left: calc(var(--at) * 1%);
+		width: 10px;
+		height: 22px;
+		transform: translateX(-50%);
+		pointer-events: none;
+	}
+
+	.ruler .ruler-mark::before {
+		left: 4.25px;
+		top: 0;
+		width: 1.5px;
+		height: 9px;
+	}
+
+	.ruler .ruler-mark.is-on::before {
+		width: 1.5px;
+		height: 18px;
+	}
+
+	.ov-flows {
+		margin-bottom: 36px;
+	}
+
+	.sheet-project {
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 30;
+		height: 48svh;
+		overflow: auto;
+		overscroll-behavior: contain;
+		padding: 16px var(--gutter) calc(28px + env(safe-area-inset-bottom));
+		background: var(--paper);
+		box-shadow: 0 -30px 60px -30px var(--shadow);
+		animation: sheet-up 0.5s var(--ease) both;
+	}
+
+	.sheet-bar {
+		position: sticky;
+		top: -16px;
+		margin: -16px calc(-1 * var(--gutter)) 24px;
+		padding: 16px var(--gutter) 10px;
+		background: var(--paper);
+		z-index: 1;
+	}
+
+	/* 説明を出している間は、図を説明の上に収まる大きさに縮める */
+	.has-selection .map-svg {
+		max-height: calc(52svh - var(--top-h) - 28px);
+	}
+
+	.has-selection .ov-body {
+		padding-bottom: 52svh;
+	}
+}
+
+@keyframes sheet-up {
+	from {
+		transform: translateY(40px);
+		opacity: 0;
+	}
+	to {
+		transform: none;
+		opacity: 1;
+	}
+}
+
+/* スマートフォン: 図はラベルを消して番号だけにし、番号と名前の対応を下に出す */
+@media (max-width: 760px) {
+	:root {
+		--gutter: 16px;
+		--top-h: 52px;
+	}
+
+	.theme-text {
+		display: none;
+	}
+
+	.theme {
+		width: 32px;
+		padding: 0;
+		justify-content: center;
+	}
+
+	.wordmark {
+		font-size: 60px;
+	}
+
+	.ov-key {
+		display: block;
+	}
+
+	.map {
+		padding: 4px var(--gutter) 16px;
+	}
+
+	.map-svg .node-name,
+	.map-svg .cat-label,
+	.map-svg .hub-caption,
+	.map-svg rect.node-hit {
+		display: none;
+	}
+
+	.map-svg .node-num {
+		display: inline;
+	}
+
+	.map-svg circle.node-hit {
+		r: 26px;
+	}
+
+	.track,
+	.hub-ring {
+		stroke-width: 1.6;
+	}
+
+	.link {
+		stroke-width: 1.3;
+	}
+
+	.orbit {
+		stroke-width: 1.4;
+	}
+
+	.badge {
+		transform: scale(1.7);
+	}
+
+	.sat-full,
+	.port-full,
+	.badge-full,
+	.map-svg .edge-label {
+		display: none;
+	}
+
+	.sat-compact,
+	.port-compact,
+	.badge-compact {
+		display: inline;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.track-pulse {
+		display: none;
+	}
+
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-delay: 0s !important;
+		transition-duration: 0.01ms !important;
+	}
+}
