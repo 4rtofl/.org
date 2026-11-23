@@ -50,4 +50,20 @@ npm run check    # Biome と型の検査
 
 ## 公開
 
-まだ設定していません。
+main に push すると、GitHub Actions（[.github/workflows/deploy.yml](.github/workflows/deploy.yml)）がビルドして、AWS の S3 と CloudFront に出し直します。欄と図の間の目盛りはビルドした日までを刻むので、毎日 0 時（日本時間）にも作り直します。AWS の側は、[infra/](infra/) の CDK のスタック `OrgSite` が作ります（書き方は Nakamaba に合わせています）。
+
+最初の 1 回だけ、手元から次を行います。
+
+1. AWS の us-east-1 の ACM で、`4rtofl.org` の証明書を発行する。検証方法は「DNS 検証」を選び、出てきた CNAME を Cloudflare に足す
+2. 証明書が発行されたら、管理者の権限で手元からデプロイする。`cdk bootstrap` をしていないアカウントでは、先に `npx cdk bootstrap` を実行する
+
+   ```sh
+   npm run deploy -- -c publicDomain=4rtofl.org -c publicCertificateArn=<証明書の ARN>
+   ```
+
+   GitHub の OIDC の設定がまだ無いアカウントでは、`-c createGitHubOidc=true` も付ける（Nakamaba と同じアカウントなら作ってあるので要らない）
+
+3. 出力された `GitHubDeployRoleArn` を、このリポジトリの Secrets に `AWS_DEPLOY_ROLE_ARN` として登録する。`PUBLIC_DOMAIN`（`4rtofl.org`）と `PUBLIC_CERTIFICATE_ARN`（証明書の ARN）も登録する
+4. Cloudflare で、`4rtofl.org` の CNAME を、出力された `DistributionDomainName` に向ける。プロキシは切る（DNS のみ）
+
+Secrets を登録するまでは、GitHub Actions はビルドまでで止まり、デプロイはしません。

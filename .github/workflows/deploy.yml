@@ -1,0 +1,57 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  # 欄と図の間の目盛りは、ビルドした日までを刻むので、毎日 0 時（日本時間）に作り直す
+  schedule:
+    - cron: "0 15 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# デプロイを途中で止めないよう、前の実行の終わりを待つ
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: ビルドしてデプロイする
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
+      # デプロイ用のロールを Secrets に登録するまでは、ビルドまでで止める
+      - name: デプロイの設定があるかを確かめる
+        id: settings
+        env:
+          ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -n "$ROLE" ]; then echo "ready=true" >> "$GITHUB_OUTPUT"; else echo "ready=false" >> "$GITHUB_OUTPUT"; echo "AWS_DEPLOY_ROLE_ARN が無いので、デプロイしません。"; fi
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        if: steps.settings.outputs.ready == 'true'
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-1
+          mask-aws-account-id: true
+      # 公開リポジトリのログは誰でも読めるので、リソース名を含む CDK の出力は失敗したときだけ出す
+      - name: CDK でデプロイする
+        if: steps.settings.outputs.ready == 'true'
+        env:
+          PUBLIC_DOMAIN: ${{ secrets.PUBLIC_DOMAIN }}
+          PUBLIC_CERTIFICATE_ARN: ${{ secrets.PUBLIC_CERTIFICATE_ARN }}
+        run: |
+          npx cdk deploy --require-approval never -c publicDomain="$PUBLIC_DOMAIN" -c publicCertificateArn="$PUBLIC_CERTIFICATE_ARN" > deploy.log 2>&1 || { cat deploy.log; exit 1; }
+          echo "デプロイしました。"

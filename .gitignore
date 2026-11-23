@@ -1,5 +1,6 @@
 node_modules/
 dist/
+cdk.out/
 .wrangler/
 .DS_Store
 *.log
