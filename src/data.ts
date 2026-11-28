@@ -142,6 +142,20 @@ export const projects: Project[] = [
 		links: [repo("uiux-auto-reviewer")],
 	},
 	{
+		id: "chusai",
+		name: "Chusai",
+		category: "agent",
+		kind: "GitHub Action",
+		summary:
+			"Merges main into open pull requests. Claude Code fixes conflicts and failing checks.",
+		created: "2026-11-25",
+		stack: ["TypeScript"],
+		runsOn: ["GitHub Actions"],
+		status: "active",
+		members: ["totosuki"],
+		links: [repo("Chusai")],
+	},
+	{
 		id: "gasho-plugins",
 		name: "GashoPlugins",
 		category: "agent",
@@ -394,6 +408,7 @@ export const actors: Actor[] = [
 		kind: "GitHub Action",
 		project: "uiux-auto-reviewer",
 	},
+	{ id: "chusai", name: "Chusai", kind: "GitHub Action", project: "chusai" },
 	{
 		id: "dopagakix",
 		name: "Dopagakix",
@@ -412,7 +427,7 @@ export const actors: Actor[] = [
 		kind: "Anthropic",
 		icon: "claude",
 		about:
-			"Claude Code on members' machines, and the models behind Bobert and the reviewer.",
+			"Claude Code on members' machines and in Chusai, and the models behind Bobert and the reviewer.",
 	},
 	{ id: "gasho", name: "Gasho", kind: "Dashboard", project: "gasho" },
 	{
@@ -570,6 +585,38 @@ export const flows: Flow[] = [
 				text: "Reads the diff and the description",
 			},
 			{ actor: "claude", label: "score", text: "Posts a score and notes" },
+		],
+	},
+	{
+		id: "resolve",
+		name: "Resolve",
+		stops: [
+			{
+				actor: "github",
+				text: "A pull request is merged on Gasho or GashoPlugins",
+			},
+			{
+				actor: "chusai",
+				label: "push to main",
+				text: "Merges main into each open pull request",
+			},
+			{
+				actor: "claude",
+				label: "conflict",
+				text: "Claude Code resolves conflicts and fixes failing checks",
+				branch: {
+					actor: "sigw",
+					label: "API calls",
+					text: "Calls go through sigw, which logs the cost",
+					dir: "in",
+				},
+			},
+			{ actor: "chusai", text: "Runs the checks again" },
+			{
+				actor: "github",
+				label: "push",
+				text: "Pushes to the pull request with a comment",
+			},
 		],
 	},
 ];
