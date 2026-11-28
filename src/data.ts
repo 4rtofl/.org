@@ -616,6 +616,12 @@ export const flows: Flow[] = [
 				actor: "github",
 				label: "push",
 				text: "Pushes to the pull request with a comment",
+				branch: {
+					actor: "uiux-auto-reviewer",
+					label: "new commit",
+					text: "Runs again on the new commit",
+					dir: "out",
+				},
 			},
 		],
 	},
